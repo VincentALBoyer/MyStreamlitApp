@@ -3,10 +3,22 @@ import numpy as np
 import random
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #                           DATA CLASSES & GAME STATE
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class MarketEvent:
+    """Represents a global or targeted market event (e.g., strike, demand surge)"""
+    name: str
+    description: str
+    duration: int
+    type: Literal["supply", "demand", "general"]
+    target_id: Optional[str] = None  # Specific supplier/customer ID or None for global
+    magnitude: float = 1.0  # Multiplier or adder depending on context
+    active: bool = True
 
 @dataclass
 class Supplier:
@@ -21,13 +33,24 @@ class Supplier:
     max_order: int  # Maximum order capacity (base)
     reliability: float  # Probability of on-time delivery
     
-    def get_lead_time(self) -> int:
-        """Calculate actual lead time with reliability factor"""
+    reliability: float  # Probability of on-time delivery
+    
+    def get_lead_time(self, active_events: List[MarketEvent] = []) -> int:
+        """Calculate actual lead time with reliability factor and event modifiers"""
         base_time = random.randint(self.lead_time_min, self.lead_time_max)
-        # Reliability affects if there's a delay
+        
+        # Check for active disruption events targeting this supplier
+        delay_days = 0
+        for event in active_events:
+            if event.active and event.type == "supply" and (event.target_id == self.id or event.target_id is None):
+                # Magnitude for supply events is typically "added days"
+                delay_days += int(event.magnitude)
+        
+        # Reliability affects if there's a delay (independent of events)
         if random.random() > self.reliability:
-            base_time += random.randint(1, 3)  # Add delay
-        return base_time
+            base_time += random.randint(1, 3)
+            
+        return base_time + delay_days
     
     def get_daily_max_order(self) -> int:
         """Get today's max order capacity (varies daily due to supply constraints)"""
@@ -85,13 +108,19 @@ class GameState:
     cash: float = 5000.0  # Starting cash
     
     # Pricing
+    # Pricing & Constraints
     selling_price: float = 20.0
     holding_cost_per_unit: float = 0.50
+    warehouse_capacity: int = 150
+    overflow_cost_per_unit: float = 5.00
     delay_penalty: float = 15.0
     
     # Orders
     customer_orders: List[CustomerOrder] = field(default_factory=list)
     supplier_orders: List[SupplierOrder] = field(default_factory=list)
+    
+    # Events & Market
+    active_events: List[MarketEvent] = field(default_factory=list)
     
     # Counters
     next_customer_order_id: int = 1
@@ -147,8 +176,8 @@ def update_supplier_availability(state: GameState):
 #                              GAME LOGIC FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def generate_customer_demand(day: int) -> int:
-    """Generate random customer demand quantity"""
+def generate_customer_demand(day: int, active_events: List[MarketEvent] = []) -> int:
+    """Generate random customer demand quantity, influenced by events"""
     day_of_week = day % 7
     if day_of_week in [1, 2, 3]:  # Mon-Wed
         base = random.randint(15, 35)
@@ -156,6 +185,14 @@ def generate_customer_demand(day: int) -> int:
         base = random.randint(10, 25)
     else:  # Weekend
         base = random.randint(5, 15)
+    
+    # Apply Event Modifiers
+    multiplier = 1.0
+    for event in active_events:
+        if event.active and event.type == "demand":
+            multiplier *= event.magnitude
+            
+    base = int(base * multiplier)
     
     if random.random() < 0.10:
         base = int(base * 1.5)
@@ -254,10 +291,19 @@ def calculate_daily_penalties(state: GameState) -> List[str]:
     return events
 
 def calculate_holding_costs(state: GameState) -> float:
-    cost = state.inventory * state.holding_cost_per_unit
-    state.total_holding_cost += cost
-    state.cash -= cost
-    return cost
+    """Calculate inventory holding costs with warehouse limits"""
+    # Standard capacity cost
+    normal_units = min(state.inventory, state.warehouse_capacity)
+    overflow_units = max(0, state.inventory - state.warehouse_capacity)
+    
+    cost_normal = normal_units * state.holding_cost_per_unit
+    cost_overflow = overflow_units * state.overflow_cost_per_unit
+    
+    total_cost = cost_normal + cost_overflow
+    
+    state.total_holding_cost += total_cost
+    state.cash -= total_cost
+    return total_cost
 
 def place_supplier_order(state: GameState, supplier_id: str, quantity: int) -> Optional[SupplierOrder]:
     if quantity <= 0: return None
@@ -269,7 +315,8 @@ def place_supplier_order(state: GameState, supplier_id: str, quantity: int) -> O
     state.cash -= total_cost
     state.total_cost += total_cost
     
-    arrival_day = state.current_day + supplier.get_lead_time()
+    # Pass active events to get impacted lead time
+    arrival_day = state.current_day + supplier.get_lead_time(state.active_events)
     
     order = SupplierOrder(
         id=state.next_supplier_order_id,
@@ -319,6 +366,39 @@ def get_kpis(state: GameState) -> Dict:
         "fill_rate": fill_rate,
         "pending_demand": pending_demand
     }
+
+def generate_market_event(state: GameState) -> Optional[str]:
+    """Randomly generate a new market event"""
+    # 10% chance of a new event each day if fewer than 2 active
+    if len(state.active_events) >= 2 or random.random() > 0.10:
+        return None
+        
+    event_types = [
+        ("demand", "📈 Tech Boom! High Demand", "Analysts predict a surge in electronics demand.", 3, 1.5, None),
+        ("demand", "📉 Market Slump", "Consumer confidence is low.", 3, 0.7, None),
+        ("supply", "⚓ Port Strike", "Customs delays at major ports.", 5, 5.0, None), # +5 days
+        ("supply", "⚡ Factory Fire", "Semiconductor factory issues.", 7, 7.0, "dragon"), # Specific to Dragon
+        ("supply", "🌪️ Storm Warning", "Shipping routes disrupted.", 3, 3.0, "aztec")
+    ]
+    
+    etype, name, desc, duration, mag, target = random.choice(event_types)
+    
+    new_event = MarketEvent(name, desc, duration, etype, target, mag)
+    state.active_events.append(new_event)
+    return f"📰 NEWS FLASH: {name} - {desc}"
+
+def update_events(state: GameState) -> List[str]:
+    """Decrease duration of active events and remove expired ones"""
+    logs = []
+    active = []
+    for event in state.active_events:
+        event.duration -= 1
+        if event.duration > 0:
+            active.append(event)
+        else:
+            logs.append(f"✅ Event Ended: {event.name}")
+    state.active_events = active
+    return logs
 
 def save_day_snapshot(state: GameState, kpis: Dict):
     state.history.append({"day": state.current_day, **kpis})

@@ -6,7 +6,8 @@ from game_engine import (
     GameState, SUPPLIERS, generate_customer_demand, create_customer_order,
     ship_specific_order, place_supplier_order, update_supplier_availability,
     process_supplier_deliveries, process_customer_deliveries, calculate_holding_costs,
-    calculate_daily_penalties, get_kpis, save_day_snapshot
+    calculate_daily_penalties, get_kpis, save_day_snapshot, generate_market_event,
+    update_events
 )
 
 # Page Conf
@@ -93,11 +94,17 @@ with h2:
             # 2. Advance
             state.current_day += 1
             update_supplier_availability(state)
+            
+            # Events
+            state.daily_events.extend(update_events(state))
+            new_evt = generate_market_event(state)
+            if new_evt: state.daily_events.append(new_evt)
+            
             state.daily_events.extend(process_supplier_deliveries(state))
             state.daily_events.extend(process_customer_deliveries(state))
             
             # 3. New Demand (Multiple Orders & Heavy Demand Stress)
-            base_demand = generate_customer_demand(state.current_day)
+            base_demand = generate_customer_demand(state.current_day, state.active_events)
             
             # Stress Event: Heavy Demand (15% chance)
             is_heavy = random.random() < 0.15
@@ -132,14 +139,32 @@ with h2:
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("💰 Profit", f"${kpis['profit']:,.0f}")
 m2.metric("💵 Cash", f"${kpis['cash']:,.0f}")
-m3.metric("📦 Inventory", f"{kpis['inventory']}")
+inv_delta = f"{kpis['inventory']}/{state.warehouse_capacity}"
+m3.metric("📦 Inventory", inv_delta, 
+    delta="Over Capacity" if kpis['inventory'] > state.warehouse_capacity else None,
+    delta_color="inverse")
 m4.metric("⏳ Orders", f"{kpis['orders_pending']}")
 m5.metric("🚚 Inbound", f"{kpis['incoming_qty']}")
 
 st.divider()
 
 # Split Layout: Main Tabs (Left) | Info Pane (Right)
+# Split Layout: Main Tabs (Left) | Info Pane (Right)
 main_tabs, info_pane = st.columns([2.5, 1])
+
+with info_pane:
+    # 0. MARKET NEWS
+    st.markdown("##### 📰 Market News")
+    if state.active_events:
+        for event in state.active_events:
+            with st.container(border=True):
+                st.markdown(f"**{event.name}**")
+                st.caption(f"{event.description}")
+                st.caption(f"Ends in: {event.duration} days")
+    else:
+        st.info("No active market events.")
+    
+    st.divider()
 
 with main_tabs:
     # TABS: Shipping | Procurement | Stats
@@ -201,7 +226,17 @@ with main_tabs:
             is_av = avail.get('available', True)
             with col:
                 with st.container(border=True):
+                    # Check for disruption
+                    is_disrupted = False
+                    delay_txt = ""
+                    for e in state.active_events:
+                        if e.type == "supply" and (e.target_id == s.id or e.target_id is None):
+                            is_disrupted = True
+                            delay_txt = f"+{e.magnitude}d delay"
+                    
                     st.markdown(f"**{s.emoji} {s.name}**")
+                    if is_disrupted:
+                        st.markdown(f":red[**⚠️ {delay_txt}**]")
                     st.caption(f"${s.unit_price} | {s.lead_time_min}-{s.lead_time_max}d")
                     if is_av:
                         max_q = avail['max_today']
