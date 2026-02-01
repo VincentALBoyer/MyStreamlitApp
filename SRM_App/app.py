@@ -1,254 +1,234 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 import logic
 
-# =============================================================================
-# PAGE CONFIGURATION
-# =============================================================================
-st.set_page_config(
-    page_title="SAP SRM | Supplier Management Console",
-    page_icon="🏬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="SAP SRM | Advanced Sourcing", page_icon="🏭", layout="wide")
 
-# Theme-Agnostic High-Contrast Styling
+# Styling
 st.markdown("""
 <style>
-    /* === FORCE LIGHT THEME GLOBALLY === */
-    .stApp, [data-testid="stAppViewContainer"], .main {
-        background-color: #f8f9fa !important;
-        color: #1a1a1a !important;
-    }
-    
-    p, span, div, label, li, h1, h2, h3, h4, h5, h6 {
-        color: #1a1a1a !important;
-    }
-    
-    /* Header - Corporate Teal with White Text */
-    .srm-header { 
-        background-color: #006064 !important; 
-        color: #ffffff !important; 
-        padding: 1.5rem; 
-        border-bottom: 5px solid #00acc1;
-        margin-bottom: 25px;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .srm-header h2 { color: #ffffff !important; margin: 0; }
-    
-    /* Metrics */
-    [data-testid="stMetricValue"] { 
-        color: #006064 !important; 
-        font-weight: 800; 
-        font-size: 1.8rem; 
-    }
-    [data-testid="stMetricLabel"] { 
-        color: #555555 !important; 
-        font-size: 0.9rem; 
-    }
-    
-    /* Action Buttons */
-    .stButton > button { 
-        border-radius: 2px; 
-        height: 3rem; 
-        font-weight: 600;
-        color: #ffffff !important;
-        background-color: #006064 !important;
-        border: none !important;
-    }
-    .stButton > button:hover {
-        background-color: #004d40 !important;
-        color: #ffffff !important;
-    }
-    
-    /* Alerts and Overlays */
-    [data-testid="stAlert"], [data-testid="stNotification"], [role="listbox"], [role="option"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border: 1px solid #dee2e6 !important;
-    }
-    
-    /* Table Styling */
-    .stDataFrame table, .stDataFrame th, .stDataFrame td {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
+    .stApp { background-color: #f5f7f9; }
+    .nav-tab { font-weight: bold; }
+    .alert-box { padding: 10px; border-radius: 5px; margin-bottom: 5px; font-weight: 500;}
+    .alert-red { background-color: #fadbd8; color: #922b21; border: 1px solid #922b21; }
+    .alert-green { background-color: #d5f5e3; color: #1e8449; border: 1px solid #1e8449; }
+    .metric-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; }
+    .metric-val { font-size: 1.6rem; font-weight: 800; color: #2c3e50; }
+    .metric-lbl { font-size: 0.8rem; text-transform: uppercase; color: #7f8c8d; }
 </style>
 """, unsafe_allow_html=True)
 
-# =============================================================================
-# SESSION STATE INITIALIZATION
-# =============================================================================
 if 'srm_state' not in st.session_state:
-    st.session_state.srm_state = logic.GameState()
-    state = st.session_state.srm_state
-    state.suppliers = logic.init_supplier_network()
-    
-    # Pre-populate some contracts
-    for sid in ["VEND-001", "VEND-002", "VEND-005"]:
-        vendor = state.suppliers[sid]
-        logic.award_contract(state, sid, vendor.category)
-        state.cash += 5000 # Neutralize setup cost for start
+    st.session_state.srm_state = logic.init_game()
+    # Default selection removed
 
 state = st.session_state.srm_state
 
 # =============================================================================
-# CALLBACKS
-# =============================================================================
-def handle_next_day():
-    logic.process_daily_batch(state)
-
-def handle_sourcing(category):
-    logic.generate_sourcing_event(state, category)
-
-# =============================================================================
-# SIDEBAR
+# SIDEBAR CONTROLS
 # =============================================================================
 with st.sidebar:
-    st.markdown("### 🏬 SRM CONSOLE")
+    st.title("🏭 SAP SRM")
+    st.caption("Advanced Procurement Sim")
     st.divider()
-    menu = st.radio("Management Modules", [
-        "📊 Portfolio Analytics",
-        "🎯 Strategic Sourcing",
-        "📑 Contract Master",
-        "🎖️ Quality Scorecards",
-        "🌍 Risk Management"
-    ])
+    
+    menu = st.radio("Module", ["🚀 Procurement Cockpit", "🏭 Sourcing Master", "📅 MRP & Planning"], label_visibility="collapsed")
     
     st.divider()
-    st.subheader("Sim Period")
-    st.metric("Period Day", f"{state.current_day} / {state.max_days}")
-    st.metric("Procurement Budget", f"${state.cash:,.0f}")
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Day", f"{state.current_day} / {state.max_days}")
+    c2.metric("Cash", f"${state.cash/1000:.1f}k")
     
     if not state.game_over:
-        st.button("➡️ PROCESS DAILY BATCH", type="primary", use_container_width=True, on_click=handle_next_day)
-    else:
-        st.error("Month End Processed")
-        if st.button("🔄 Reset SRM Simulation", use_container_width=True):
-            del st.session_state.srm_state
+        if st.button("➡️ NEXT DAY", type="primary", use_container_width=True):
+            logic.process_daily_turn(state)
             st.rerun()
+    else:
+        st.error("Simulation Ended")
+        if st.button("Download Data", type="primary"):
+            pass # TODO handled in main
 
 # =============================================================================
-# DASHBOARD LOGIC
+# MAIN AREA
 # =============================================================================
-kpis = logic.get_kpis(state)
 
-if menu == "📊 Portfolio Analytics":
-    st.markdown("<div class='srm-header'><h2>Supplier Portfolio Analytics</h2></div>", unsafe_allow_html=True)
+if menu == "🚀 Procurement Cockpit":
+    st.subheader("🚀 Procurement Execution Cockpit")
     
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Network Quality", f"{kpis['avg_quality']:.1f}%")
-    c2.metric("Reliability Rate", f"{kpis['reliability_rate']:.1f}%")
-    c3.metric("Active Contracts", kpis['active_contracts'])
-    c4.metric("Risk Incidents", kpis['risk_events'])
+    # 1. KPI Cards
+    k1, k2, k3, k4 = st.columns(4)
+    k1.markdown(f"<div class='metric-card'><div class='metric-val'>{state.inventory}</div><div class='metric-lbl'>Current Stock</div></div>", unsafe_allow_html=True)
+    k2.markdown(f"<div class='metric-card'><div class='metric-val'>{len(state.active_pos)}</div><div class='metric-lbl'>Open POs</div></div>", unsafe_allow_html=True)
+    k3.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_rework_cost:,.0f}</div><div class='metric-lbl'>Quality Costs</div></div>", unsafe_allow_html=True)
+    k4.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_stockout_penalty:,.0f}</div><div class='metric-lbl'>Stockout Penalties</div></div>", unsafe_allow_html=True)
     
     st.divider()
     
-    col_log, col_suppliers = st.columns([1, 2])
+    # 2. Daily Alerts
+    c_alert, c_sched = st.columns([1, 1])
     
-    with col_log:
-        st.markdown("### 📜 Market Intelligence")
-        with st.container(height=350):
+    with c_alert:
+        st.write("##### 📢 Daily Notifications")
+        with st.container(height=300):
             if state.daily_events:
-                for e in reversed(state.daily_events):
-                    st.write(e)
+                for ev in reversed(state.daily_events):
+                    style = "alert-red" if "STOPPAGE" in ev or "DELAY" in ev or "Defective" in ev else "alert-green"
+                    st.markdown(f"<div class='alert-box {style}'>{ev}</div>", unsafe_allow_html=True)
             else:
-                st.caption("Scanning market data...")
+                st.caption("No recent events.")
                 
-    with col_suppliers:
-        st.markdown("### 🏬 Supplier Network Status")
-        sup_data = [{
-            "Vendor": s.name,
-            "Category": s.category,
-            "Quality": f"{s.quality_score}%",
-            "Reliability": f"{s.reliability}%",
-            "Risk": s.risk_level
-        } for s in state.suppliers.values()]
-        st.dataframe(pd.DataFrame(sup_data), use_container_width=True, hide_index=True)
-
-elif menu == "🎯 Strategic Sourcing":
-    st.markdown("<div class='srm-header'><h2>Strategic Sourcing Center</h2></div>", unsafe_allow_html=True)
-    
-    st.markdown("### 🏆 Run New RFP (Request for Proposal)")
-    cat = st.selectbox("Select Procurement Category", ["Raw Materials", "Logistics", "Components"])
-    
-    if st.button(f"Generate Bids for {cat}", use_container_width=True):
-        handle_sourcing(cat)
+    with c_sched:
+        st.write("##### 📅 Today's Production Target")
+        today_demand = state.production_schedule.get(state.current_day, 0)
         
-    if state.available_bids:
-        st.divider()
-        st.markdown(f"### 📋 Comparison of Bids: {cat}")
+        status_color = "green" if state.inventory >= today_demand else "red"
+        st.markdown(f"""
+        ### Target: **{today_demand} units**
+        ### Available: <span style='color:{status_color}'>{state.inventory} units</span>
+        """, unsafe_allow_html=True)
         
-        for bid in state.available_bids:
-            with st.container(border=True):
-                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-                col1.write(f"**{bid.supplier_name}**")
-                col2.metric("Setup Cost", f"${bid.proposed_cost:,.0f}")
-                col3.metric("Quality Commit", f"{bid.quality_commitment}%")
-                col4.metric("Lead Time", f"{bid.guaranteed_lead_time}d")
-                
-                if st.button(f"Award Contract to {bid.supplier_name}", key=bid.id):
-                    if logic.award_contract(state, bid.id, cat):
-                        st.success("Contract Awarded! Redirecting to Portfolio...")
-                        st.rerun()
-                    else:
-                        st.error("Insufficient budget for setup.")
+        if state.inventory < today_demand:
+            st.warning(f"⚠️ RISK: Shortage of {today_demand - state.inventory} units! Line stop imminent.")
 
-elif menu == "📑 Contract Master":
-    st.markdown("<div class='srm-header'><h2>Global Contract Master</h2></div>", unsafe_allow_html=True)
-    
-    if state.contracts:
-        for contract in state.contracts:
-            vendor = state.suppliers.get(contract.supplier_id)
-            if vendor:
-                with st.container(border=True):
-                    c1, c2, c3 = st.columns([2, 2, 1])
-                    c1.write(f"**Contract ID #{contract.id}**")
-                    c1.write(f"Vendor: {vendor.name} ({contract.category})")
-                    c2.write(f"Effective From: Day {contract.start_day}")
-                    c2.write(f"Daily Cost Allocation: **${contract.terms_cost * 0.05:,.2f}**")
-                    status = "✅ Active" if contract.is_active else "🚫 Terminated"
-                    c3.markdown(f"**Status: {status}**")
+    # 3. Inbound Delivery Monitor
+    st.write("##### 🚛 Inbound Monitor (Open POs)")
+    if state.active_pos:
+        po_data = []
+        for po in state.active_pos:
+            supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+            po_data.append({
+                "PO #": po.id,
+                "Vendor": supp.name,
+                "Qty": po.qty_ordered,
+                "Est. Arrival": f"Day {po.expected_arrival_day}",
+                "Status": "Processing" if po.status == "Processing" else ("Late" if state.current_day > po.expected_arrival_day else "In Transit")
+            })
+        st.dataframe(pd.DataFrame(po_data), use_container_width=True)
     else:
-        st.info("No active procurement contracts.")
+        st.info("No active Purchase Orders. Check MRP to place orders.")
 
-elif menu == "🎖️ Quality Scorecards":
-    st.markdown("<div class='srm-header'><h2>Supplier Quality Scorecards</h2></div>", unsafe_allow_html=True)
+elif menu == "📅 MRP & Planning":
+    st.subheader("📅 Material Requirements Planning (MRP)")
     
-    for s in state.suppliers.values():
-        with st.expander(f"Performance Review: {s.name}"):
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Compliance Rate", f"{(s.on_time_deliveries/s.deliveries_completed*100 if s.deliveries_completed > 0 else 100):.1f}%")
-            c2.metric("Quality Index", f"{s.quality_score}%")
-            c3.metric("Lead Time Variance", "±0.2d")
-            
-            st.divider()
-            st.write(f"**Historical Deliveries**: {s.deliveries_completed}")
-            st.write(f"**On-Time Hit Rate**: {s.on_time_deliveries}")
-            
-            if s.quality_score < 70:
-                st.warning("Quality Score below threshold! Issue Improvement Notice.")
-
-elif menu == "🌍 Risk Management":
-    st.markdown("<div class='srm-header'><h2>Supply Chain Risk Management</h2></div>", unsafe_allow_html=True)
+    # 1. The Schedule Chart
+    st.write("##### Production Demand Forecast (Next 30 Days)")
     
-    st.markdown("### 🛡️ Risk Profile")
+    sched_df = pd.DataFrame(list(state.production_schedule.items()), columns=["Day", "Demand"])
+    # Filter for future only
+    sched_df = sched_df[sched_df["Day"] >= state.current_day]
     
-    risk_counts = {"Low": 0, "Med": 0, "High": 0}
-    for s in state.suppliers.values():
-        risk_counts[s.risk_level] += 1
-        
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Low Risk Vendors", risk_counts["Low"])
-    c2.metric("Medium Risk Exposure", risk_counts["Med"])
-    c3.metric("High Vulnerability", risk_counts["High"])
+    chart = alt.Chart(sched_df).mark_bar().encode(
+        x='Day:O',
+        y='Demand:Q',
+        color=alt.value("#3498db")
+    ).properties(height=200)
+    st.altair_chart(chart, use_container_width=True)
     
     st.divider()
-    st.markdown("### ⚠️ Critical Alerts")
-    critical = [s for s in state.suppliers.values() if s.quality_score < 65 or s.reliability < 70]
-    if critical:
-        for s in critical:
-            st.error(f"VENDOR AT RISK: {s.name} - Reliability critical ({s.reliability}%)")
-    else:
-        st.success("No critical vendor risks detected.")
+    
+    # 2. Ordering Interface
+    st.write("##### 📝 Procurement Desk (Place Orders)")
+    
+    for supp in state.available_suppliers:
+        with st.container(border=True):
+            c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
+            c1.markdown(f"**{supp.name}**")
+            c1.caption(supp.description)
+            delta_val = None
+            if state.current_day > 1:
+                diff = supp.current_price - supp.previous_price
+                pct = (diff / supp.previous_price) * 100
+                delta_val = f"{pct:+.1f}% vs Yesterday"
+            
+            c2.metric("Market Price", f"${supp.current_price:.2f}", delta=delta_val, delta_color="inverse")
+            c3.metric("Lead Time", f"{supp.quoted_lead_time}d")
+            c4.metric("Min Qty", supp.min_order_qty)
+            
+            # Individual Order Form
+            with c5:
+                # Unique key for each input to manage state
+                qty = st.number_input("Qty", min_value=0, step=50, key=f"qty_{supp.id}", label_visibility="collapsed")
+                if st.button("Order", key=f"btn_po_{supp.id}", use_container_width=True):
+                    if qty > 0:
+                        success, msg = logic.place_order(state, supp.id, qty)
+                        if success:
+                            st.success(f"Order Sent to {supp.name}")
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                    else:
+                        st.warning("Enter Qty")
+        
+elif menu == "🏭 Sourcing Master":
+    st.subheader("🏭 Supplier Performance Master")
+    st.write("Real-time performance tracking. Monitor Actuals vs Promoted Specs.")
+    
+    for i, s in enumerate(state.available_suppliers):
+        stats = logic.get_supplier_stats(state, s.id)
+        
+        with st.container(border=True):
+            c_head, c_kpi = st.columns([1, 3])
+            
+            with c_head:
+                st.markdown(f"### {s.name}")
+                st.caption(s.category)
+                st.write(f"_{s.description}_")
+                
+                st.caption(s.category)
+                # Description is already shown below or above, removing duplicate here if it exists or consolidating.
+                # Actually, looking at the file, line 174 is likely the st.caption(f"_{s.description}_") added recently.
+                # The line 172 `st.write(f"_{s.description}_")` is the first one. 
+                # I will remove the one at line 174.
+
+            with c_kpi:
+                # Comparison Grid
+                k1, k2, k3, k4 = st.columns(4)
+                
+                # PRICE
+                # Overall variation vs Start (Quoted)
+                diff = s.current_price - s.quoted_price
+                pct = (diff / s.quoted_price) * 100
+                delta_val = f"{pct:+.1f}% vs Quote"
+                
+                k1.metric("Current Price", f"${s.current_price:.2f}", delta=delta_val, delta_color="inverse")
+                
+                # LEAD TIME
+                k2.metric("Quoted Lead Time", f"{s.quoted_lead_time}d", help="Promised Delivery Speed")
+                
+                # DEFECTS (Actual vs Predicted)
+                if stats['has_history']:
+                    val = f"{stats['defect_rate']:.1f}%"
+                    delta = -stats['defect_rate'] # Negative delta is bad (red) - wait, st.metric delta colors: Positive is Up (Green). 
+                    # We want Low Defect = Green.
+                    # If we use delta_color="inverse", positive delta is Good (Green)? No, inverse means positive is Bad (Red).
+                    # Let's just use color formatting or simple metric.
+                    k3.metric("Actual Defect Rate", val, delta=None) 
+                else:
+                    k3.metric("Defect Rate", "N/A", "No History")
+
+                # RELIABILITY
+                if stats['has_history']:
+                    val = f"{stats['reliability']:.0f}%"
+                    # reliability < 90 is bad. 
+                    delta = stats['reliability'] - 100 # Gap to perfection
+                    k4.metric("On-Time Rate", val, f"{stats['deliveries']} deliveries")
+                else:
+                    k4.metric("On-Time Rate", "N/A", "No History")
+                
+                st.divider()
+                # Financial Impact
+                if stats['has_history']:
+                    c_fin, c_min = st.columns(2)
+                    c_fin.markdown(f"**Total Rework Cost**: :red[${stats['total_rework']:,.0f}]")
+                    c_min.markdown(f"Min Order Qty: **{s.min_order_qty}**")
+                else:
+                     st.caption("Place orders to generate performance data.")
+
+# Footer Analysis
+if state.game_over:
+    with st.expander("🏁 End of Game Analysis", expanded=True):
+        st.write(f"### Final Cash: ${state.cash:,.0f}")
+        csv = logic.get_csv_export(state)
+        st.download_button("📥 Download Transaction Log", csv, "srm_mrp_data.csv")

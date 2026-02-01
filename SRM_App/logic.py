@@ -1,47 +1,56 @@
 import random
+import pandas as pd
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
 
 @dataclass
+class Delivery:
+    """Represents a completed delivery for analysis"""
+    id: str
+    day_arrived: int
+    supplier_name: str
+    qty_received: int
+    qty_defective: int
+    rework_cost: float
+    status: str # On Time, Late
+    unit_price: float
+
+@dataclass
+class PurchaseOrder:
+    """A specific order placed by the student"""
+    id: str
+    supplier_id: str
+    day_placed: int
+    qty_ordered: int
+    quoted_lead_time: int
+    expected_arrival_day: int
+    status: str = "Open" # Open, Shipped, Received, Processing
+    arrival_day: Optional[int] = None
+
+@dataclass
 class Supplier:
     id: str
-    name: str
-    category: str  # Raw Materials, Logistics, Components
-    quality_score: int  # 0-100
-    cost_index: float  # Multiplier (e.g., 1.0 is standard)
-    reliability: int  # 0-100 % chance of hitting lead time
-    lead_time: int
-    capacity: int
-    risk_level: str  # Low, Med, High
-    status: str = "Active"  # Active, Under Review, Blacklisted
-    
-    # Performance History
-    deliveries_completed: int = 0
-    on_time_deliveries: int = 0
-    quality_failures: int = 0
-
-@dataclass
-class SourcingBid:
-    id: str
-    supplier_name: str
-    proposed_cost: float
-    guaranteed_lead_time: int
-    quality_commitment: int
-    reliability_commitment: int
-
-@dataclass
-class Contract:
-    id: int
-    supplier_id: str
+    name: str 
     category: str
-    start_day: int
-    duration: int
-    terms_cost: float
-    is_active: bool = True
+    
+    # VISIBLE
+    quoted_price: float
+    current_price: float 
+    previous_price: float # For day-to-day delta
+    quoted_lead_time: int
+    min_order_qty: int
+    
+    # HIDDEN
+    true_reliability: float 
+    true_defect_rate: float 
+    true_lead_time_var: int 
+    true_price_volatility: float 
+    
+    description: str
 
 @dataclass
 class GameState:
@@ -49,21 +58,23 @@ class GameState:
     max_days: int = 30
     cash: float = 50000.0
     
-    # Supplier Master
-    suppliers: Dict[str, Supplier] = field(default_factory=dict)
+    # Sourcing
+    available_suppliers: List[Supplier] = field(default_factory=list)
+    active_supplier: Optional[Supplier] = None
     
-    # Active Sourcing
-    contracts: List[Contract] = field(default_factory=list)
-    available_bids: List[SourcingBid] = field(default_factory=list)
-    next_contract_id: int = 1
+    # Inventory & MRP
+    inventory: int = 500 # Start with some buffer
+    production_schedule: Dict[int, int] = field(default_factory=dict) # Day -> Qty Needed
+    active_pos: List[PurchaseOrder] = field(default_factory=list)
     
-    # Performance Data
-    total_savings: float = 0
-    risk_events_hit: int = 0
-    
-    # History
+    # Analytics
+    delivery_log: List[Delivery] = field(default_factory=list)
     daily_events: List[str] = field(default_factory=list)
-    history: List[Dict] = field(default_factory=dict)
+    
+    # Financials
+    total_spend: float = 0.0
+    total_rework_cost: float = 0.0
+    total_stockout_penalty: float = 0.0
     
     game_over: bool = False
 
@@ -71,141 +82,238 @@ class GameState:
 # INITIALIZATION
 # =============================================================================
 
-def init_supplier_network() -> Dict[str, Supplier]:
-    return {
-        "VEND-001": Supplier("VEND-001", "Global Circuits", "Components", 92, 1.2, 95, 4, 1000, "Low"),
-        "VEND-002": Supplier("VEND-002", "SwiftLogix", "Logistics", 75, 0.8, 80, 2, 5000, "Med"),
-        "VEND-003": Supplier("VEND-003", "CheapParts Co", "Components", 60, 0.6, 65, 7, 2000, "High"),
-        "VEND-004": Supplier("VEND-004", "Prime Materials", "Raw Materials", 98, 1.5, 99, 5, 500, "Low"),
-        "VEND-005": Supplier("VEND-005", "Standard Sourcing", "Raw Materials", 82, 1.0, 90, 4, 1500, "Low"),
-        "VEND-006": Supplier("VEND-006", "Atlas Freight", "Logistics", 88, 1.1, 85, 3, 3000, "Med")
-    }
+def init_game() -> GameState:
+    state = GameState()
+    
+    # 1. Suppliers (Same as before but with Min Order Qty)
+    # 1. Suppliers
+    state.available_suppliers = [
+        Supplier("V-LOW", "CutRate Sensors", "Components", 10.0, 10.0, 10.0, 5, 200, 0.70, 0.15, 4, 0.05, "Aggressive pricing, spotty quality."),
+        Supplier("V-FAST", "Express Components", "Components", 25.0, 25.0, 25.0, 1, 10, 0.98, 0.01, 0, 0.05, "Overnight delivery premium. Reliable."),
+        Supplier("V-MID", "Standard Supply", "Components", 14.0, 14.0, 14.0, 5, 100, 0.90, 0.03, 2, 0.10, "Balanced choice for standard needs."),
+        Supplier("V-VOL", "Global Trading", "Components", 11.0, 11.0, 11.0, 8, 500, 0.85, 0.05, 5, 0.40, "High volume importer. Volatile.")
+    ]
+    
+    # 2. Generate Production Schedule (The Demand)
+    # Variable demand pattern to force planning
+    for day in range(1, 32):
+        # Base demand 100, spikes every 5 days
+        demand = 100
+        if day % 5 == 0:
+            demand = 300 # Surge
+        if day > 20: 
+            demand += 50 # Late sim ramp up
+        
+        # Add some noise
+        demand += random.randint(-10, 20)
+        state.production_schedule[day] = demand
+        
+    return state
 
 # =============================================================================
 # GAME ACTIONS
 # =============================================================================
 
-def generate_sourcing_event(state: GameState, category: str):
-    """Generate 3 competing bids for a category"""
-    state.available_bids = []
-    
-    # Templates for bids
-    if category == "Raw Materials":
-        base_cost = 5000
-    elif category == "Logistics":
-        base_cost = 3000
-    else:  # Components
-        base_cost = 8000
-        
-    for i in range(3):
-        # Trade-off logic: High quality = High cost
-        quality = random.randint(60, 98)
-        cost_mod = (quality / 80) * random.uniform(0.9, 1.1)
-        lead_time = max(1, 10 - (quality // 10))
-        reliability = random.randint(70, 99)
-        
-        bid = SourcingBid(
-            id=f"BID-{category[:2]}-{i+1}",
-            supplier_name=f"Proposed Vendor {i+1}",
-            proposed_cost=base_cost * cost_mod,
-            guaranteed_lead_time=lead_time,
-            quality_commitment=quality,
-            reliability_commitment=reliability
-        )
-        state.available_bids.append(bid)
+def switch_supplier(state: GameState, supplier_id: str):
+    """Switch active supplier. In a complex sim, this might cost money/time."""
+    supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
+    if supp:
+        # If switching, maybe a small admin fee?
+        if state.active_supplier and state.active_supplier.id != supplier_id:
+             state.daily_events.append(f"🔄 Switched partner to {supp.name}")
+        state.active_supplier = supp
 
-def award_contract(state: GameState, bid_id: str, category: str):
-    """Award a contract to a bidder"""
-    bid = next((b for b in state.available_bids if b.id == bid_id), None)
-    if not bid:
-        return False
-        
-    contract = Contract(
-        id=state.next_contract_id,
-        supplier_id=bid.id, # In this sim, we create a new vendor entry from the bid
-        category=category,
-        start_day=state.current_day,
-        duration=10,
-        terms_cost=bid.proposed_cost
-    )
+def place_order(state: GameState, supplier_id: str, qty: int):
+    """Manual PO placement to specific supplier"""
+    supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
+    if not supp:
+        return False, "Invalid Supplier"
     
-    # Create the supplier entry for tracking
-    new_vendor = Supplier(
-        id=bid.id,
-        name=bid.supplier_name,
-        category=category,
-        quality_score=bid.quality_commitment,
-        cost_index=1.0,
-        reliability=bid.reliability_commitment,
-        lead_time=bid.guaranteed_lead_time,
-        capacity=2000,
-        risk_level="Med"
-    )
+    if qty < supp.min_order_qty:
+        return False, f"Below Min Order Qty ({supp.min_order_qty})"
     
-    state.suppliers[bid.id] = new_vendor
-    state.contracts.append(contract)
-    state.next_contract_id += 1
-    state.cash -= bid.proposed_cost # Initial setup cost
-    state.available_bids = [] # Clear sourcing event
-    return True
+    # Cost calculated at Current Spot Price
+    cost = qty * supp.current_price
+    if state.cash < cost:
+        return False, "Insufficient Budget"
+    
+    # PO is placed
+    state.cash -= cost
+    state.total_spend += cost
+    
+    arrival_day = state.current_day + supp.quoted_lead_time
+    
+    po = PurchaseOrder(
+        id=f"PO-{state.current_day}-{random.randint(100,999)}",
+        supplier_id=supp.id,
+        day_placed=state.current_day,
+        qty_ordered=qty,
+        quoted_lead_time=supp.quoted_lead_time,
+        expected_arrival_day=arrival_day
+    )
+    state.active_pos.append(po)
+    state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Est. Day {arrival_day})")
+    return True, "Order Placed"
 
-def process_daily_batch(state: GameState):
-    """Process supplier disruptions and scorecard updates"""
+def process_daily_turn(state: GameState):
     state.daily_events = []
     
-    # 1. Contract Performance Checks
-    for contract in state.contracts:
-        if not contract.is_active: continue
+    # 0. MARKET FLUCTUATIONS (Update Spot Prices)
+    for s in state.available_suppliers:
+        # Save previous
+        s.previous_price = s.current_price
         
-        vendor = state.suppliers.get(contract.supplier_id)
-        if not vendor: continue
-        
-        # Daily Operational Cost
-        cost = contract.terms_cost * 0.05 # 5% of contract value per day
-        state.cash -= cost
-        
-        # Reliability Check (Random disruption)
-        if random.randint(0, 100) > vendor.reliability:
-            state.daily_events.append(f"⚠️ DISRUPTION: {vendor.name} delayed shipment (Reliability failure)")
-            state.risk_events_hit += 1
-            vendor.quality_score = max(0, vendor.quality_score - 2)
-        else:
-            vendor.on_time_deliveries += 1
+        # Volatility check
+        if s.true_price_volatility > 0:
+            change = random.uniform(-s.true_price_volatility, s.true_price_volatility)
+            s.current_price = s.quoted_price * (1.0 + change)
+            # Ensure no huge drops below cost (optional, but keep simple)
+            s.current_price = max(s.quoted_price * 0.5, s.current_price)
             
-        vendor.deliveries_completed += 1
+            # Big Spike Event
+            if random.random() < 0.05: # 5% chance of surge
+                s.current_price *= 1.5
+                state.daily_events.append(f"📈 PRICE SURGE: {s.name} spot price jump to ${s.current_price:.2f}")
     
-    # 2. Random Market Events
-    if random.random() < 0.15: # 15% chance of market event
-        events = [
-            ("Raw Material shortage", "Raw Materials", -5),
-            ("Fuel price surge", "Logistics", -10),
-            ("Port congestion", "Logistics", -3),
-            ("New quality standard", "Components", -5)
-        ]
-        ev_name, cat, impact = random.choice(events)
-        state.daily_events.append(f"🌍 MARKET EVENT: {ev_name}! {cat} vendors quality impacted.")
-        for s in state.suppliers.values():
-            if s.category == cat:
-                s.quality_score = max(0, s.quality_score + impact)
+    # 1. RECEIVING LOGIC (Check for arrivals)
+    # We iterate a copy to modify the list safely if we were removing (though we keep POs for history? No, move to delivery log)
+    arrived_pos = []
+    
+    # 1. PREDICTIVE ALERTS (Day Before)
+    for po in state.active_pos:
+        if po.status != "Open": continue
+        if state.current_day == po.expected_arrival_day - 1:
+             is_late = random.random() > next((s.true_reliability for s in state.available_suppliers if s.id == po.supplier_id), 0.9)
+             if is_late:
+                 supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+                 days_late = random.randint(1, supp.true_lead_time_var)
+                 po.expected_arrival_day += days_late
+                 state.daily_events.append(f"⚠️ NOTICE: PO {po.id} delayed by carrier. New Arrival: Day {po.expected_arrival_day}")
 
-    # 3. Financial Update
+    # 2. PRODUCTION RUN (Consumption - Using Start-of-Day Stock)
+    demand = state.production_schedule.get(state.current_day, 0)
+    
+    if state.inventory >= demand:
+        state.inventory -= demand
+    else:
+        # STOCKOUT
+        shortfall = demand - state.inventory
+        penalty = shortfall * 20.0 
+        state.total_stockout_penalty += penalty
+        state.inventory = 0
+        state.cash -= penalty
+        state.daily_events.append(f"🛑 LINE STOPPAGE! Missing {shortfall} units. Penalty: ${penalty:,.0f}")
+
+    # 3. END-OF-DAY LOGISTICS (Arrivals & Stocking)
+    
+    # Step A: Upgrade "Processing" to "Received" (Stock becomes available)
+    # This happens for goods that arrived YESTERDAY (Day X-1), so they are ready for Day X.
+    for po in state.active_pos:
+        if po.status == "Processing":
+            # Add to Inventory
+            supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+            
+            # Defects logic
+            defect_rate = supp.true_defect_rate
+            if random.random() < 0.2: defect_rate *= 2.0 
+            qty_bad = int(po.qty_ordered * defect_rate)
+            qty_good = po.qty_ordered - qty_bad
+            
+            rework = qty_bad * 50.0
+            state.total_rework_cost += rework
+            state.cash -= rework
+            state.inventory += qty_good
+            
+            # KPI Log
+            promised_day = po.day_placed + po.quoted_lead_time
+            status_kpi = "On Time"
+            if state.current_day > promised_day:
+                 status_kpi = f"Late ({state.current_day - promised_day}d)"
+            
+            po.status = "Received"
+            # We don't need to keep it in active_pos for UI if we don't want to.
+            # User will see Inventory jump.
+            # Maybe keep event?
+            
+            deliv = Delivery(
+                id=f"DEL-{po.id}",
+                day_arrived=state.current_day,
+                supplier_name=supp.name,
+                qty_received=qty_good,
+                qty_defective=qty_bad,
+                rework_cost=rework,
+                status=status_kpi,
+                unit_price=po.qty_ordered * supp.quoted_price / po.qty_ordered if po.qty_ordered else 0 
+            )
+            state.delivery_log.append(deliv)
+            
+            msg = f"✅ STOCK AVAILABLE: {qty_good} units from {supp.name}."
+            if qty_bad > 0: msg += f" ({qty_bad} Defective!)"
+            state.daily_events.append(msg)
+    
+    # Step B: Check for NEW Arrivals (Open -> Processing)
+    # We check if they arrive *Tomorrow*? No, we want them to appear as "Processing" on Tomorrow's screen.
+    # So we check if current_day + 1 >= expected.
+    for po in state.active_pos:
+        if po.status == "Open":
+            if state.current_day + 1 >= po.expected_arrival_day:
+                po.status = "Processing"
+                state.daily_events.append(f"🚛 ARRIVAL: PO {po.id} at dock. Processing (Available +24h).")
+
+    # Clean up PO list (Remove completely processed ones)
+    state.active_pos = [po for po in state.active_pos if po.status != "Received"]
+        
+    # 3. ADVANCE
     state.current_day += 1
     if state.current_day > state.max_days or state.cash < 0:
         state.game_over = True
 
-def get_kpis(state: GameState) -> Dict:
-    """Calculate SRM KPIs"""
-    avg_quality = sum(s.quality_score for s in state.suppliers.values()) / len(state.suppliers) if state.suppliers else 0
-    active_contracts = len([c for c in state.contracts if c.is_active])
-    reliability_rate = sum(s.on_time_deliveries for s in state.suppliers.values()) / \
-                       sum(s.deliveries_completed for s in state.suppliers.values()) * 100 \
-                       if sum(s.deliveries_completed for s in state.suppliers.values()) > 0 else 0
-                       
+# =============================================================================
+# EXPORT
+# =============================================================================
+def get_csv_export(state: GameState) -> str:
+    data = []
+    for d in state.delivery_log:
+        data.append({
+            "Day": d.day_arrived,
+            "Supplier": d.supplier_name,
+            "Qty_Good": d.qty_received,
+            "Qty_Defect": d.qty_defective,
+            "Rework_Cost": d.rework_cost,
+            "Status": d.status
+        })
+    return pd.DataFrame(data).to_csv(index=False)
+
+def get_supplier_stats(state: GameState, supplier_id: str) -> Dict:
+    """Calculate real-time performance stats for a supplier"""
+    supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
+    if not supp: return {}
+    
+    # Filter deliveries
+    deliveries = [d for d in state.delivery_log if d.supplier_name == supp.name]
+    total_deliv = len(deliveries)
+    
+    if total_deliv == 0:
+        return {
+            "deliveries": 0,
+            "defect_rate": 0.0,
+            "reliability": 100.0, # Benefit of the doubt
+            "total_rework": 0.0,
+            "has_history": False
+        }
+        
+    total_items = sum(d.qty_received + d.qty_defective for d in deliveries)
+    total_defects = sum(d.qty_defective for d in deliveries)
+    
+    defect_rate = (total_defects / total_items * 100) if total_items > 0 else 0.0
+    
+    on_time = sum(1 for d in deliveries if d.status == "On Time")
+    reliability = (on_time / total_deliv * 100)
+    
     return {
-        "day": state.current_day,
-        "cash": state.cash,
-        "avg_quality": avg_quality,
-        "active_contracts": active_contracts,
-        "reliability_rate": reliability_rate,
-        "risk_events": state.risk_events_hit
+        "deliveries": total_deliv,
+        "defect_rate": defect_rate,
+        "reliability": reliability,
+        "total_rework": sum(d.rework_cost for d in deliveries),
+        "has_history": True
     }
