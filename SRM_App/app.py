@@ -39,7 +39,9 @@ with st.sidebar:
     
     c1, c2 = st.columns(2)
     c1.metric("Day", f"{state.current_day} / {state.max_days}")
-    c2.metric("Cash", f"${state.cash/1000:.1f}k")
+    
+    total_cost = state.total_spend + state.total_rework_cost + state.total_stockout_penalty
+    c2.metric("Total Cost", f"${total_cost:,.0f}", help="Purchase + Rework + Stockout Penalty")
     
     if not state.game_over:
         def on_next_day():

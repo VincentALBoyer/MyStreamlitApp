@@ -119,17 +119,16 @@ def commit_draft_orders(state: GameState):
         supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
         cost = po.qty_ordered * supp.current_price
         
-        # Final Budget Check (in case multiple drafts exceed budget combined)
-        if state.cash >= cost:
-            state.cash -= cost
+        # Final Budget Check (Removed - Unlimited)
+        # if state.cash >= cost:
+        if True:
+            state.cash -= cost # We still track cash flow (it will go negative, or we just ignore)
             state.total_spend += cost
             po.status = "Open"
             state.daily_events.append(f"📝 PO Confirmed: {po.qty_ordered} from {supp.name}")
             confirmed_count += 1
-        else:
-            # Failed to commit (Lack of funds) - Cancel it
-            state.daily_events.append(f"⚠️ PO {po.id} Cancelled (Insufficient Funds at execution)")
-            state.active_pos.remove(po) # Remove failed draft
+        # else:
+        #    ...
             
     return confirmed_count
 
@@ -157,9 +156,9 @@ def place_order(state: GameState, supplier_id: str, qty: int, status: str = "Ope
     
     # Cost Check
     cost = qty * supp.current_price
-    if state.cash < cost:
-        # If Draft, we allow it but warn? Or block? Block to be safe.
-        return False, "Insufficient Budget"
+    # Removed Budget Check as per user request (Unlimited Budget, Minimize Cost)
+    # if state.cash < cost:
+    #    return False, "Insufficient Budget"
     
     # Setup PO
     arrival_day = state.current_day + supp.quoted_lead_time
@@ -296,7 +295,7 @@ def process_daily_turn(state: GameState):
         
     # 3. ADVANCE
     state.current_day += 1
-    if state.current_day > state.max_days or state.cash < 0:
+    if state.current_day > state.max_days:
         state.game_over = True
 
 # =============================================================================
