@@ -18,6 +18,8 @@ class Delivery:
     rework_cost: float
     status: str # On Time, Late
     unit_price: float
+    day_placed: int # Added for Lead Time Calc
+    quoted_lead_time: int
 
 @dataclass
 class PurchaseOrder:
@@ -273,7 +275,13 @@ def process_daily_turn(state: GameState):
                 qty_defective=qty_bad,
                 rework_cost=rework,
                 status=status_kpi,
-                unit_price=po.qty_ordered * supp.quoted_price / po.qty_ordered if po.qty_ordered else 0 
+                unit_price=po.qty_ordered * supp.quoted_price / po.qty_ordered if po.qty_ordered else 0, # Use quoted or active? Using quoted from PO if we stored it, or current supply? logic uses supp.quoted_price. 
+                # Actually, PO doesn't store unit price. It stores total cost? No. 
+                # The line above "unit_price=po.qty_ordered * supp.quoted_price..." is weird. 
+                # Let's fix it to use the `supp.current_price` that was valid? 
+                # Actually, simple fix: pass po.day_placed.
+                day_placed=po.day_placed,
+                quoted_lead_time=po.quoted_lead_time
             )
             state.delivery_log.append(deliv)
             
@@ -302,16 +310,22 @@ def process_daily_turn(state: GameState):
 # EXPORT
 # =============================================================================
 def get_csv_export(state: GameState) -> str:
-    cols = ["Day", "Supplier", "Qty_Good", "Qty_Defect", "Rework_Cost", "Status"]
+    cols = ["Day_Placed", "Day_Arrived", "Supplier", "Qty_Total", "Qty_Good", "Qty_Defect", "Unit_Price", "Rework_Cost", "Status", "Lead_Time_Quoted", "Lead_Time_Actual"]
     data = []
     for d in state.delivery_log:
+        total_qty = d.qty_received + d.qty_defective
         data.append({
-            "Day": d.day_arrived,
+            "Day_Placed": d.day_placed,
+            "Day_Arrived": d.day_arrived,
             "Supplier": d.supplier_name,
+            "Qty_Total": total_qty,
             "Qty_Good": d.qty_received,
             "Qty_Defect": d.qty_defective,
+            "Unit_Price": d.unit_price,
             "Rework_Cost": d.rework_cost,
-            "Status": d.status
+            "Status": d.status,
+            "Lead_Time_Quoted": d.quoted_lead_time,
+            "Lead_Time_Actual": d.day_arrived - d.day_placed
         })
     return pd.DataFrame(data, columns=cols).to_csv(index=False)
 
