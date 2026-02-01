@@ -42,13 +42,30 @@ with st.sidebar:
     c2.metric("Cash", f"${state.cash/1000:.1f}k")
     
     if not state.game_over:
-        if st.button("➡️ NEXT DAY", type="primary", use_container_width=True):
+        def on_next_day():
+            # 1. Commit Validated Drafts
+            logic.commit_draft_orders(state)
+            
+            # 2. Check for "Forgot to Validate" inputs (Auto-Draft and Commit)
+            # If user entered numbers but didn't click Validate, we take them now.
+            for s in state.available_suppliers:
+                qty = st.session_state.get(f"qty_{s.id}", 0)
+                if qty > 0:
+                    # Place immediately as Open (skipping draft phase for speed)
+                    success, msg = logic.place_order(state, s.id, qty, status="Open")
+                    if success:
+                        st.session_state[f"qty_{s.id}"] = 0
+                    else:
+                        st.session_state.daily_events.append(f"⚠️ ORDER ERROR ({s.name}): {msg}")
+
+            # 3. Process Turn
             logic.process_daily_turn(state)
-            st.rerun()
+            
+        st.button("➡️ NEXT DAY", type="primary", use_container_width=True, on_click=on_next_day)
     else:
         st.error("Simulation Ended")
-        if st.button("Download Data", type="primary"):
-            pass # TODO handled in main
+        csv_data = logic.get_csv_export(state)
+        st.download_button("📥 Download Data", data=csv_data, file_name="srm_simulation_log.csv", mime="text/csv", type="primary")
 
 # =============================================================================
 # MAIN AREA
@@ -103,7 +120,7 @@ if menu == "🚀 Procurement Cockpit":
                 "Vendor": supp.name,
                 "Qty": po.qty_ordered,
                 "Est. Arrival": f"Day {po.expected_arrival_day}",
-                "Status": "Processing" if po.status == "Processing" else ("Late" if state.current_day > po.expected_arrival_day else "In Transit")
+                "Status": "Pending (Draft)" if po.status == "Draft" else ("Processing" if po.status == "Processing" else ("Late" if state.current_day > po.expected_arrival_day else "In Transit"))
             })
         st.dataframe(pd.DataFrame(po_data), use_container_width=True)
     else:
@@ -146,20 +163,67 @@ elif menu == "📅 MRP & Planning":
             c3.metric("Lead Time", f"{supp.quoted_lead_time}d")
             c4.metric("Min Qty", supp.min_order_qty)
             
-            # Individual Order Form
+            # Individual Order Form -> Centralized input.
             with c5:
-                # Unique key for each input to manage state
-                qty = st.number_input("Qty", min_value=0, step=50, key=f"qty_{supp.id}", label_visibility="collapsed")
-                if st.button("Order", key=f"btn_po_{supp.id}", use_container_width=True):
-                    if qty > 0:
-                        success, msg = logic.place_order(state, supp.id, qty)
-                        if success:
-                            st.success(f"Order Sent to {supp.name}")
-                            st.rerun()
-                        else:
-                            st.error(msg)
-                    else:
-                        st.warning("Enter Qty")
+                # We use session state keys to track values across reruns
+                key = f"qty_{supp.id}"
+                if key not in st.session_state:
+                    st.session_state[key] = 0
+                
+                # Disable input if locked (i.e. if a Draft exists for this supplier)
+                is_locked = any(po.supplier_id == supp.id and po.status == "Draft" for po in state.active_pos)
+                st.number_input("Qty", min_value=0, step=50, key=key, label_visibility="collapsed", disabled=is_locked)
+
+    # Batch Actions Logic
+    # No "orders_locked" state needed anymore, we use existence of Drafts in active_pos
+        
+    def cancel_drafts():
+        # Remove all Draft orders
+        state.active_pos = [po for po in state.active_pos if po.status != "Draft"]
+        # Clear inputs (optional)
+        for s in state.available_suppliers:
+             st.session_state[f"qty_{s.id}"] = 0
+            
+    def validate_orders():
+        # Create Draft POs
+        created = 0
+        
+        # Clear existing drafts first? To avoid duplicates if pressed twice?
+        # Yes, standard behavior: Validate = "Take current inputs as the plan"
+        state.active_pos = [po for po in state.active_pos if po.status != "Draft"]
+        
+        for s in state.available_suppliers:
+            qty = st.session_state.get(f"qty_{s.id}", 0)
+            if qty > 0:
+                success, msg = logic.place_order(state, s.id, qty, status="Draft")
+                if success:
+                    created += 1
+                    st.session_state[f"qty_{s.id}"] = 0 # Clear inputs
+                else:
+                    st.toast(f"⚠️ {s.name}: {msg}", icon="🚫")
+        
+        if created > 0:
+            st.toast(f"✅ {created} Orders Validated. See Inbound Monitor.", icon="📋")
+        else:
+            pass # Silent if nothing entered
+
+    # Buttons
+    b1, b2 = st.columns([1, 4])
+    with b1:
+        # Check if we have Drafts
+        has_drafts = any(po.status == "Draft" for po in state.active_pos)
+        if has_drafts:
+             st.button("🔓 Unlock / Clear", use_container_width=True, on_click=cancel_drafts)
+        else:
+             def clear_inputs():
+                 for s in state.available_suppliers: st.session_state[f"qty_{s.id}"] = 0
+             st.button("❌ Clear Inputs", use_container_width=True, on_click=clear_inputs)
+
+    with b2:
+        # Validate Button
+        # Logic: If we have Drafts, maybe show "Update"? 
+        # Standard: Always allow adding more or overwriting.
+        st.button("🔐 Validate Orders", type="primary", use_container_width=True, on_click=validate_orders)
         
 elif menu == "🏭 Sourcing Master":
     st.subheader("🏭 Supplier Performance Master")

@@ -110,6 +110,29 @@ def init_game() -> GameState:
         
     return state
 
+def commit_draft_orders(state: GameState):
+    """Transition Draft POs to Open, deducting cash."""
+    drafts = [po for po in state.active_pos if po.status == "Draft"]
+    confirmed_count = 0
+    
+    for po in drafts:
+        supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+        cost = po.qty_ordered * supp.current_price
+        
+        # Final Budget Check (in case multiple drafts exceed budget combined)
+        if state.cash >= cost:
+            state.cash -= cost
+            state.total_spend += cost
+            po.status = "Open"
+            state.daily_events.append(f"📝 PO Confirmed: {po.qty_ordered} from {supp.name}")
+            confirmed_count += 1
+        else:
+            # Failed to commit (Lack of funds) - Cancel it
+            state.daily_events.append(f"⚠️ PO {po.id} Cancelled (Insufficient Funds at execution)")
+            state.active_pos.remove(po) # Remove failed draft
+            
+    return confirmed_count
+
 # =============================================================================
 # GAME ACTIONS
 # =============================================================================
@@ -123,8 +146,8 @@ def switch_supplier(state: GameState, supplier_id: str):
              state.daily_events.append(f"🔄 Switched partner to {supp.name}")
         state.active_supplier = supp
 
-def place_order(state: GameState, supplier_id: str, qty: int):
-    """Manual PO placement to specific supplier"""
+def place_order(state: GameState, supplier_id: str, qty: int, status: str = "Open"):
+    """Manual PO placement. If status='Draft', no cash deduction yet."""
     supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
     if not supp:
         return False, "Invalid Supplier"
@@ -132,15 +155,13 @@ def place_order(state: GameState, supplier_id: str, qty: int):
     if qty < supp.min_order_qty:
         return False, f"Below Min Order Qty ({supp.min_order_qty})"
     
-    # Cost calculated at Current Spot Price
+    # Cost Check
     cost = qty * supp.current_price
     if state.cash < cost:
+        # If Draft, we allow it but warn? Or block? Block to be safe.
         return False, "Insufficient Budget"
     
-    # PO is placed
-    state.cash -= cost
-    state.total_spend += cost
-    
+    # Setup PO
     arrival_day = state.current_day + supp.quoted_lead_time
     
     po = PurchaseOrder(
@@ -149,10 +170,20 @@ def place_order(state: GameState, supplier_id: str, qty: int):
         day_placed=state.current_day,
         qty_ordered=qty,
         quoted_lead_time=supp.quoted_lead_time,
-        expected_arrival_day=arrival_day
+        expected_arrival_day=arrival_day,
+        status=status
     )
+    
+    if status == "Open":
+        # Commit Immediately
+        state.cash -= cost
+        state.total_spend += cost
+        state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Est. Day {arrival_day})")
+    elif status == "Draft":
+        # Do not deduct cash yet. Do not log public event.
+        pass
+        
     state.active_pos.append(po)
-    state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Est. Day {arrival_day})")
     return True, "Order Placed"
 
 def process_daily_turn(state: GameState):
@@ -272,6 +303,7 @@ def process_daily_turn(state: GameState):
 # EXPORT
 # =============================================================================
 def get_csv_export(state: GameState) -> str:
+    cols = ["Day", "Supplier", "Qty_Good", "Qty_Defect", "Rework_Cost", "Status"]
     data = []
     for d in state.delivery_log:
         data.append({
@@ -282,7 +314,7 @@ def get_csv_export(state: GameState) -> str:
             "Rework_Cost": d.rework_cost,
             "Status": d.status
         })
-    return pd.DataFrame(data).to_csv(index=False)
+    return pd.DataFrame(data, columns=cols).to_csv(index=False)
 
 def get_supplier_stats(state: GameState, supplier_id: str) -> Dict:
     """Calculate real-time performance stats for a supplier"""
