@@ -40,8 +40,9 @@ with st.sidebar:
     c1, c2 = st.columns(2)
     c1.metric("Day", f"{state.current_day} / {state.max_days}")
     
-    total_cost = state.total_spend + state.total_rework_cost + state.total_stockout_penalty
-    c2.metric("Total Cost", f"${total_cost:,.0f}", help="Purchase + Rework + Stockout Penalty")
+    total_cost = state.total_spend + state.total_rework_cost + state.total_stockout_penalty + state.total_storage_cost
+    help_text = f"Spend: ${state.total_spend:,.0f}\nStockout: ${state.total_stockout_penalty:,.0f}\nRework: ${state.total_rework_cost:,.0f}\nStorage: ${state.total_storage_cost:,.0f}"
+    c2.metric("Total Cost", f"${total_cost:,.0f}", help=help_text)
     
     if not state.game_over:
         def on_next_day():
@@ -77,11 +78,12 @@ if menu == "🚀 Procurement Cockpit":
     st.subheader("🚀 Procurement Execution Cockpit")
     
     # 1. KPI Cards
-    k1, k2, k3, k4 = st.columns(4)
-    k1.markdown(f"<div class='metric-card'><div class='metric-val'>{state.inventory}</div><div class='metric-lbl'>Current Stock</div></div>", unsafe_allow_html=True)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.markdown(f"<div class='metric-card'><div class='metric-val'>{state.inventory}</div><div class='metric-lbl'>Stock</div></div>", unsafe_allow_html=True)
     k2.markdown(f"<div class='metric-card'><div class='metric-val'>{len(state.active_pos)}</div><div class='metric-lbl'>Open POs</div></div>", unsafe_allow_html=True)
-    k3.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_rework_cost:,.0f}</div><div class='metric-lbl'>Quality Costs</div></div>", unsafe_allow_html=True)
-    k4.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_stockout_penalty:,.0f}</div><div class='metric-lbl'>Stockout Penalties</div></div>", unsafe_allow_html=True)
+    k3.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_rework_cost:,.0f}</div><div class='metric-lbl'>Quality</div></div>", unsafe_allow_html=True)
+    k4.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_stockout_penalty:,.0f}</div><div class='metric-lbl'>Stockout</div></div>", unsafe_allow_html=True)
+    k5.markdown(f"<div class='metric-card'><div class='metric-val'>${state.total_storage_cost:,.0f}</div><div class='metric-lbl'>Storage</div></div>", unsafe_allow_html=True)
     
     st.divider()
     

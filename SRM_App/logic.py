@@ -77,6 +77,10 @@ class GameState:
     total_spend: float = 0.0
     total_rework_cost: float = 0.0
     total_stockout_penalty: float = 0.0
+    total_storage_cost: float = 0.0 
+    
+    # Settings
+    holding_cost_per_unit: float = 2.0 # $2 per unit per day
     
     game_over: bool = False
 
@@ -235,6 +239,14 @@ def process_daily_turn(state: GameState):
         state.inventory = 0
         state.cash -= penalty
         state.daily_events.append(f"🛑 LINE STOPPAGE! Missing {shortfall} units. Penalty: ${penalty:,.0f}")
+
+    # 2.B STORAGE COSTS
+    # Apply cost to remaining inventory
+    daily_storage = state.inventory * state.holding_cost_per_unit
+    state.total_storage_cost += daily_storage
+    state.cash -= daily_storage
+    # Optional event log to remind them? Maybe only if it's high.
+    # state.daily_events.append(f"Storage Cost: ${daily_storage:,.0f}")
 
     # 3. END-OF-DAY LOGISTICS (Arrivals & Stocking)
     
