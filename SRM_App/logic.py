@@ -22,6 +22,15 @@ class Delivery:
     quoted_lead_time: int
 
 @dataclass
+class Invoice:
+    id: str
+    po_id: str
+    supplier_id: str
+    amount: float
+    due_day: int
+    status: str = "Unpaid" # Unpaid, Paid
+    
+@dataclass
 class PurchaseOrder:
     """A specific order placed by the student"""
     id: str
@@ -46,6 +55,8 @@ class Supplier:
     quoted_lead_time: int
     min_order_qty: int
     
+
+    
     # HIDDEN
     true_reliability: float 
     true_defect_rate: float 
@@ -53,6 +64,10 @@ class Supplier:
     true_price_volatility: float 
     
     description: str
+
+    # RELATIONSHIP (Moved to end to allow defaults)
+    relationship_score: float = 50.0 # 0 to 100. <20 Blocked. >80 Discounts.
+    is_blocked: bool = False
 
 @dataclass
 class GameState:
@@ -78,6 +93,8 @@ class GameState:
     total_rework_cost: float = 0.0
     total_stockout_penalty: float = 0.0
     total_storage_cost: float = 0.0 
+    
+    invoices: List[Invoice] = field(default_factory=list)
     
     # Settings
     holding_cost_per_unit: float = 2.0 # $2 per unit per day
@@ -128,10 +145,22 @@ def commit_draft_orders(state: GameState):
         # Final Budget Check (Removed - Unlimited)
         # if state.cash >= cost:
         if True:
-            state.cash -= cost # We still track cash flow (it will go negative, or we just ignore)
+            # MOVED CASH DEDUCTION TO INVOICE PAYMENT
+            # state.cash -= cost 
             state.total_spend += cost
             po.status = "Open"
-            state.daily_events.append(f"📝 PO Confirmed: {po.qty_ordered} from {supp.name}")
+            
+            # Create Invoice (Due at Delivery)
+            inv = Invoice(
+                id=f"INV-{po.id}",
+                po_id=po.id,
+                supplier_id=supp.id,
+                amount=cost,
+                due_day=po.expected_arrival_day
+            )
+            state.invoices.append(inv)
+            
+            state.daily_events.append(f"📝 PO Confirmed: {po.qty_ordered} from {supp.name} (Inv Due Day {inv.due_day})")
             confirmed_count += 1
         # else:
         #    ...
@@ -152,6 +181,86 @@ def switch_supplier(state: GameState, supplier_id: str):
         state.active_supplier = supp
 
 def place_order(state: GameState, supplier_id: str, qty: int, status: str = "Open"):
+    """Manual PO placement. If status='Draft', no cash deduction yet."""
+    supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
+    if not supp:
+        return False, "Invalid Supplier"
+        
+    if supp.is_blocked:
+        return False, "Supplier Blocked - Improve Reputation"
+    
+    if qty < supp.min_order_qty:
+        return False, f"Below Min Order Qty ({supp.min_order_qty})"
+    
+    # Cost Check
+    cost = qty * supp.current_price
+    
+    # Setup PO
+    arrival_day = state.current_day + supp.quoted_lead_time
+    
+    po = PurchaseOrder(
+        id=f"PO-{state.current_day}-{random.randint(100,999)}",
+        supplier_id=supp.id,
+        day_placed=state.current_day,
+        qty_ordered=qty,
+        quoted_lead_time=supp.quoted_lead_time,
+        expected_arrival_day=arrival_day,
+        status=status
+    )
+    
+    if status == "Open":
+        # Commit Immediately
+        # MOVED CASH DEDUCTION TO INVOICE PAYMENT
+        # state.cash -= cost
+        state.total_spend += cost
+        
+        inv = Invoice(
+            id=f"INV-{po.id}",
+            po_id=po.id,
+            supplier_id=supp.id,
+            amount=cost,
+            due_day=arrival_day
+        )
+        state.invoices.append(inv)
+        
+        state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Inv Due Day {arrival_day})")
+    elif status == "Draft":
+        # Do not deduct cash yet. Do not log public event.
+        pass
+        
+    state.active_pos.append(po)
+    return True, "Order Placed"
+
+def pay_invoice(state: GameState, invoice_id: str):
+    """Pay an open invoice. Adjust reputation based on timeliness."""
+    inv = next((i for i in state.invoices if i.id == invoice_id), None)
+    if not inv or inv.status == "Paid": return
+    
+    supp = next((s for s in state.available_suppliers if s.id == inv.supplier_id), None)
+    
+    # 1. Deduct Cash
+    state.cash -= inv.amount
+    inv.status = "Paid"
+    
+    # 2. Score Logic
+    # Early: > 2 days before Due Date
+    # Late: > Due Date
+    if state.current_day <= inv.due_day - 2:
+        supp.relationship_score += 5.0 # WAS 2.0
+        state.daily_events.append(f"💰 PAID EARLY: {supp.name} is impressed! Score +5.")
+    elif state.current_day > inv.due_day:
+        # Penalty already applied daily, but maybe a final specific hit?
+        supp.relationship_score -= 10.0 # WAS 5.0
+        state.daily_events.append(f"💸 PAID LATE: {supp.name} is furious. Score -10.")
+    else:
+        # On time (Day of or 1 day before)
+        supp.relationship_score += 1.0 # WAS 0.5
+        # state.daily_events.append(f"💰 Paid {supp.name} on time.")
+
+    # Clamp Score
+    supp.relationship_score = max(0.0, min(100.0, supp.relationship_score))
+
+def process_daily_turn(state: GameState):
     """Manual PO placement. If status='Draft', no cash deduction yet."""
     supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
     if not supp:
@@ -181,9 +290,22 @@ def place_order(state: GameState, supplier_id: str, qty: int, status: str = "Ope
     
     if status == "Open":
         # Commit Immediately
-        state.cash -= cost
+        # MOVED CASH DEDUCTION TO INVOICE PAYMENT
+        # state.cash -= cost
         state.total_spend += cost
-        state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Est. Day {arrival_day})")
+        
+        inv = Invoice(
+            id=f"INV-{str(random.randint(1000,9999))}", # Temp ID until PO ID is fixed? PO ID is created above.
+            po_id=po.id,
+            supplier_id=supp.id,
+            amount=cost,
+            due_day=arrival_day
+        )
+        # Fix: Using PO ID for invoice ID consistency
+        inv.id = f"INV-{po.id}"
+        state.invoices.append(inv)
+        
+        state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Inv Due Day {arrival_day})")
     elif status == "Draft":
         # Do not deduct cash yet. Do not log public event.
         pass
@@ -199,17 +321,52 @@ def process_daily_turn(state: GameState):
         # Save previous
         s.previous_price = s.current_price
         
+        # 0.a Reputation Check & Blocking Logic
+        # Rules: Blocked if Score < 20 OR Any invoice > 5 days late
+        has_serious_overdue = any(
+            (i.supplier_id == s.id and i.status == "Unpaid" and (state.current_day - i.due_day > 5))
+            for i in state.invoices
+        )
+        
+        if s.relationship_score < 20.0:
+            s.is_blocked = True
+        elif has_serious_overdue:
+            s.is_blocked = True
+            # Log once?
+            # state.daily_events.append(f"⛔ {s.name} HALTED SUPPLY: Unpaid invoices > 5 days late.")
+        else:
+            s.is_blocked = False
+            
+        # 0.b Reputation Price Modifier
+        # Score 50 = 1.0x (Neutral)
+        # Score 100 = 0.95x (Discount)
+        # Score 0 = 1.10x (Premium)
+        # Linear interp: Factor = 1.10 - (Score/100 * 0.15)? 
+        # 0 -> 1.10. 100 -> 0.95.
+        rep_factor = 1.10 - (s.relationship_score / 100.0) * 0.15
+        
         # Volatility check
+        base_price = s.quoted_price * rep_factor
+        
         if s.true_price_volatility > 0:
             change = random.uniform(-s.true_price_volatility, s.true_price_volatility)
-            s.current_price = s.quoted_price * (1.0 + change)
-            # Ensure no huge drops below cost (optional, but keep simple)
-            s.current_price = max(s.quoted_price * 0.5, s.current_price)
+            s.current_price = base_price * (1.0 + change)
             
             # Big Spike Event
-            if random.random() < 0.05: # 5% chance of surge
+            if random.random() < 0.05: # 5% chance of surgy
                 s.current_price *= 1.5
                 state.daily_events.append(f"📈 PRICE SURGE: {s.name} spot price jump to ${s.current_price:.2f}")
+        else:
+            s.current_price = base_price
+            
+    # 0.c Invoice Aging (Penalty for unpaid overdue)
+    for inv in state.invoices:
+        if inv.status == "Unpaid" and state.current_day > inv.due_day:
+            supp = next((s for s in state.available_suppliers if s.id == inv.supplier_id), None)
+            supp.relationship_score -= 2.0 # WAS 1.0 - Accelerated decay
+            # Log only periodically?
+            if random.random() < 0.2:
+                 state.daily_events.append(f"⚠️ OVERDUE: Invoice {inv.id} for {supp.name}. Relationship plummeting (-2).")
     
     # 1. RECEIVING LOGIC (Check for arrivals)
     # We iterate a copy to modify the list safely if we were removing (though we keep POs for history? No, move to delivery log)

@@ -33,7 +33,7 @@ with st.sidebar:
     st.caption("Advanced Procurement Sim")
     st.divider()
     
-    menu = st.radio("Module", ["🚀 Procurement Cockpit", "🏭 Sourcing Master", "📅 MRP & Planning"], label_visibility="collapsed")
+    menu = st.radio("Module", ["🚀 Procurement Cockpit", "🏭 Sourcing Master", "📅 MRP & Planning", "💰 Financials"], label_visibility="collapsed")
     
     st.divider()
     
@@ -54,6 +54,11 @@ with st.sidebar:
             for s in state.available_suppliers:
                 qty = st.session_state.get(f"qty_{s.id}", 0)
                 if qty > 0:
+                    if s.is_blocked:
+                         st.toast(f"🚫 {s.name} is BLOCKED. Order rejected.", icon="🛑")
+                         st.session_state.daily_events.append(f"⛔ Order to {s.name} REJECTED (Blocked)")
+                         continue
+                         
                     # Place immediately as Open (skipping draft phase for speed)
                     success, msg = logic.place_order(state, s.id, qty, status="Open")
                     if success:
@@ -164,6 +169,8 @@ elif menu == "📅 MRP & Planning":
                 delta_val = f"{pct:+.1f}% vs Yesterday"
             
             c2.metric("Market Price", f"${supp.current_price:.2f}", delta=delta_val, delta_color="inverse")
+            if supp.is_blocked:
+                c2.caption(":red[BLOCKED]")
             c3.metric("Lead Time", f"{supp.quoted_lead_time}d")
             c4.metric("Min Qty", supp.min_order_qty)
             
@@ -244,11 +251,8 @@ elif menu == "🏭 Sourcing Master":
                 st.caption(s.category)
                 st.write(f"_{s.description}_")
                 
-                st.caption(s.category)
-                # Description is already shown below or above, removing duplicate here if it exists or consolidating.
-                # Actually, looking at the file, line 174 is likely the st.caption(f"_{s.description}_") added recently.
-                # The line 172 `st.write(f"_{s.description}_")` is the first one. 
-                # I will remove the one at line 174.
+                st.metric("Relationship Score", f"{s.relationship_score:.1f}/100")
+                if s.is_blocked: st.error("BLOCKED: Payment Issues")
 
             with c_kpi:
                 # Comparison Grid
@@ -293,6 +297,68 @@ elif menu == "🏭 Sourcing Master":
                     c_min.markdown(f"Min Order Qty: **{s.min_order_qty}**")
                 else:
                      st.caption("Place orders to generate performance data.")
+
+elif menu == "💰 Financials":
+    st.subheader("💰 Financials & Accounts Payable")
+    st.write("Manage invoices and supplier relationships. Pay early to gain trust!")
+    
+    # 1. Supplier Trust Board
+    st.write("##### 🤝 Supplier Relationship Score (0-100)")
+    cols = st.columns(len(state.available_suppliers))
+    for i, s in enumerate(state.available_suppliers):
+        with cols[i]:
+            val = round(s.relationship_score, 1)
+            delta = None
+            if val < 30: 
+                color = "red" 
+                status = "CRITICAL"
+            elif val > 80: 
+                color = "green" 
+                status = "Excellent"
+            else: 
+                color = "off" 
+                status = "Neutral"
+            
+            st.metric(s.name, f"{val}/100", status)
+            if s.is_blocked:
+                st.error("BLOCKED 🛑")
+
+    st.divider()
+    
+    # 2. Invoices
+    st.write("##### 🧾 Unpaid Invoices")
+    
+    unpaid = [i for i in state.invoices if i.status == "Unpaid"]
+    
+    if not unpaid:
+        st.success("No pending invoices. Great job!")
+    else:
+        # Table with Actions
+        # We'll use columns for a simple list view
+        for inv in unpaid:
+            supp = next((s for s in state.available_suppliers if s.id == inv.supplier_id), None)
+            
+            # Color code based on due date
+            days_left = inv.due_day - state.current_day
+            
+            with st.container(border=True):
+                c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
+                c1.markdown(f"**{supp.name}** (Inv #{inv.id})")
+                c2.write(f"${inv.amount:,.0f}")
+                
+                if days_left < 0:
+                    c3.markdown(f":red[Overdue {-days_left}d]")
+                elif days_left == 0:
+                    c3.markdown(f":orange[Due Today]")
+                else:
+                    c3.markdown(f":green[Due in {days_left}d]")
+                
+                # Pay Button
+                # Key must be unique
+                if c5.button("PAY 💸", key=f"pay_{inv.id}", type="primary" if days_left < 2 else "secondary"):
+                    logic.pay_invoice(state, inv.id)
+                    st.toast(f"Paid ${inv.amount:,.0f} to {supp.name}")
+                    st.rerun()
 
 # Footer Analysis
 if state.game_over:
