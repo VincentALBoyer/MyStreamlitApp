@@ -56,7 +56,7 @@ with st.sidebar:
                 if qty > 0:
                     if s.is_blocked:
                          st.toast(f"🚫 {s.name} is BLOCKED. Order rejected.", icon="🛑")
-                         st.session_state.daily_events.append(f"⛔ Order to {s.name} REJECTED (Blocked)")
+                         state.daily_events.append(f"⛔ Order to {s.name} REJECTED (Blocked)")
                          continue
                          
                     # Place immediately as Open (skipping draft phase for speed)
@@ -64,16 +64,32 @@ with st.sidebar:
                     if success:
                         st.session_state[f"qty_{s.id}"] = 0
                     else:
-                        st.session_state.daily_events.append(f"⚠️ ORDER ERROR ({s.name}): {msg}")
+                        state.daily_events.append(f"⚠️ ORDER ERROR ({s.name}): {msg}")
+                        st.toast(f"⚠️ {s.name}: {msg}", icon="🚫")
 
             # 3. Process Turn
             logic.process_daily_turn(state)
             
         st.button("➡️ NEXT DAY", type="primary", use_container_width=True, on_click=on_next_day)
     else:
-        st.error("Simulation Ended")
-        csv_data = logic.get_csv_export(state)
-        st.download_button("📥 Download Data", data=csv_data, file_name="srm_simulation_log.csv", mime="text/csv", type="primary")
+        st.error("Simulation Ended. See Analysis below.")
+        st.divider()
+        st.write("### 🏁 End of Game")
+        st.write(f"**Final Total Cost:** ${state.total_spend + state.total_rework_cost + state.total_stockout_penalty + state.total_storage_cost:,.2f}")
+        
+        # Download Real Data
+        csv = logic.get_csv_export(state)
+        st.download_button("📥 Download Transaction Log", csv, "srm_mrp_data.csv", type="primary", use_container_width=True)
+        
+        st.divider()
+        st.write("#### 🎓 Training Data")
+        # Generate Simulation Button
+        if st.button("🔄 Gen. 100-Order History", help="Simulate a 100-order game for analysis practice", use_container_width=True):
+            st.session_state['sim_csv'] = logic.generate_historical_simulation(100)
+            st.success("Generated!")
+        
+        if 'sim_csv' in st.session_state:
+            st.download_button("📥 Download 100 Sim Log", st.session_state['sim_csv'], "srm_historical_data.csv", use_container_width=True)
 
 # =============================================================================
 # MAIN AREA
@@ -218,24 +234,27 @@ elif menu == "📅 MRP & Planning":
         else:
             pass # Silent if nothing entered
 
-    # Buttons
-    b1, b2 = st.columns([1, 4])
-    with b1:
-        # Check if we have Drafts
-        has_drafts = any(po.status == "Draft" for po in state.active_pos)
+    # Buttons State Logic
+    has_drafts = any(po.status == "Draft" for po in state.active_pos)
+    
+    # Right-aligned, compact
+    b_space, b_clear, b_val = st.columns([6, 1, 1])
+    
+    with b_clear:
         if has_drafts:
-             st.button("🔓 Unlock / Clear", use_container_width=True, on_click=cancel_drafts)
+             # UNLOCK Button (Cancels Drafts)
+             st.button("🔓 Unlock", on_click=cancel_drafts, help="Cancel drafts and edit")
         else:
+             # CLEAR Button (Resets inputs)
              def clear_inputs():
                  for s in state.available_suppliers: st.session_state[f"qty_{s.id}"] = 0
-             st.button("❌ Clear Inputs", use_container_width=True, on_click=clear_inputs)
+             st.button("❌ Clear", on_click=clear_inputs, help="Reset inputs to 0")
 
-    with b2:
-        # Validate Button
-        # Logic: If we have Drafts, maybe show "Update"? 
-        # Standard: Always allow adding more or overwriting.
-        st.button("🔐 Validate Orders", type="primary", use_container_width=True, on_click=validate_orders)
-        
+    with b_val:
+        # VALIDATE Button
+        # Disabled if already locked (has drafts)
+        st.button("🔐 Validate", type="primary", on_click=validate_orders, disabled=has_drafts, help="Lock and validate orders")
+             
 elif menu == "🏭 Sourcing Master":
     st.subheader("🏭 Supplier Performance Master")
     st.write("Real-time performance tracking. Monitor Actuals vs Promoted Specs.")
@@ -361,8 +380,4 @@ elif menu == "💰 Financials":
                     st.rerun()
 
 # Footer Analysis
-if state.game_over:
-    with st.expander("🏁 End of Game Analysis", expanded=True):
-        st.write(f"### Final Cash: ${state.cash:,.0f}")
-        csv = logic.get_csv_export(state)
-        st.download_button("📥 Download Transaction Log", csv, "srm_mrp_data.csv")
+

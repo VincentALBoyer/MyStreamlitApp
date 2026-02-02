@@ -39,6 +39,7 @@ class PurchaseOrder:
     qty_ordered: int
     quoted_lead_time: int
     expected_arrival_day: int
+    unit_price: float = 0.0 # Stored price at time of order
     status: str = "Open" # Open, Shipped, Received, Processing
     arrival_day: Optional[int] = None
 
@@ -205,6 +206,7 @@ def place_order(state: GameState, supplier_id: str, qty: int, status: str = "Ope
         qty_ordered=qty,
         quoted_lead_time=supp.quoted_lead_time,
         expected_arrival_day=arrival_day,
+        unit_price=supp.current_price,
         status=status
     )
     
@@ -371,6 +373,8 @@ def process_daily_turn(state: GameState):
     # 1. RECEIVING LOGIC (Check for arrivals)
     # We iterate a copy to modify the list safely if we were removing (though we keep POs for history? No, move to delivery log)
     arrived_pos = []
+
+
     
     # 1. PREDICTIVE ALERTS (Day Before)
     for po in state.active_pos:
@@ -379,7 +383,9 @@ def process_daily_turn(state: GameState):
              is_late = random.random() > next((s.true_reliability for s in state.available_suppliers if s.id == po.supplier_id), 0.9)
              if is_late:
                  supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
-                 days_late = random.randint(1, supp.true_lead_time_var)
+                 # Fix: Ensure max is at least 1 to avoid ValueError if variance is 0
+                 var_days = max(1, supp.true_lead_time_var)
+                 days_late = random.randint(1, var_days)
                  po.expected_arrival_day += days_late
                  state.daily_events.append(f"⚠️ NOTICE: PO {po.id} delayed by carrier. New Arrival: Day {po.expected_arrival_day}")
 
@@ -444,11 +450,7 @@ def process_daily_turn(state: GameState):
                 qty_defective=qty_bad,
                 rework_cost=rework,
                 status=status_kpi,
-                unit_price=po.qty_ordered * supp.quoted_price / po.qty_ordered if po.qty_ordered else 0, # Use quoted or active? Using quoted from PO if we stored it, or current supply? logic uses supp.quoted_price. 
-                # Actually, PO doesn't store unit price. It stores total cost? No. 
-                # The line above "unit_price=po.qty_ordered * supp.quoted_price..." is weird. 
-                # Let's fix it to use the `supp.current_price` that was valid? 
-                # Actually, simple fix: pass po.day_placed.
+                unit_price=po.unit_price, # Use stored Price from PO
                 day_placed=po.day_placed,
                 quoted_lead_time=po.quoted_lead_time
             )
@@ -531,3 +533,55 @@ def get_supplier_stats(state: GameState, supplier_id: str) -> Dict:
         "total_rework": sum(d.rework_cost for d in deliveries),
         "has_history": True
     }
+
+def generate_historical_simulation(num_orders=100) -> str:
+    """Simulates a parallel game with random orders to generate a rich dataset for analysis."""
+    # Create a dummy state
+    sim_state = init_game()
+    sim_state.max_days = 9999 
+    
+    # We want 100 *Completed Deliveries* for the CSV
+    while len(sim_state.delivery_log) < num_orders:
+        # Random Supplier
+        supp = random.choice(sim_state.available_suppliers)
+        
+        # CHEAT: Reset reputation/blocking to ensure we can actually place orders
+        # The goal is data generation (Lead Time/defects), not testing player skill.
+        supp.is_blocked = False
+        supp.relationship_score = 50.0 
+        
+        # CHEAT: Inject Price Variance so history looks real
+        if supp.true_price_volatility > 0:
+            # Fluctuate +/- 2x variance to make it visible
+            vol = supp.true_price_volatility * 2.0 
+            change = random.uniform(-vol, vol)
+            supp.current_price = round(supp.quoted_price * (1.0 + change), 2)
+        
+        # Random Qty
+        qty = random.choice([100, 200, 500, 1000])
+        
+        # Place Order
+        success, msg = place_order(sim_state, supp.id, qty, status="Open")
+        
+        if success:
+            # Advance 1-3 days randomly to spread them out
+            days_skip = random.randint(1, 3)
+            for _ in range(days_skip):
+                process_daily_turn(sim_state)
+                # Auto-pay invoices to prevent massive debt accumulation/re-blocking
+                for inv in sim_state.invoices:
+                    if inv.status == "Unpaid":
+                         inv.status = "Paid" 
+        else:
+             # If failed (e.g. random constraint), just advance 1 day and try again
+             process_daily_turn(sim_state)
+
+        # Safety break
+        if sim_state.current_day > 3000: break
+            
+    # Process remaining until all received or we have enough
+    while len(sim_state.active_pos) > 0 and len(sim_state.delivery_log) < num_orders + 10:
+        process_daily_turn(sim_state)
+        if sim_state.current_day > 3500: break 
+        
+    return get_csv_export(sim_state)
