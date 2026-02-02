@@ -1,238 +1,331 @@
-import pandas as pd
-import numpy as np
 import random
+import pandas as pd
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#                           DATA CLASSES & GAME STATE
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
+# DATA CLASSES
+# =============================================================================
 
 @dataclass
-class Supplier:
+class Material:
     id: str
     name: str
-    emoji: str
+    cost: float
+    unit: str
+
+@dataclass
+class Product:
+    id: str
+    name: str
+    price: float
+    bom: Dict[str, int] # Bill of Materials: {material_id: qty_needed}
+    production_hours: int # Capacity needed
+
+@dataclass
+class SalesOrder:
+    id: str
+    day_placed: int
+    customer_name: str
+    product_id: str
+    qty: int
     unit_price: float
-    lead_time_min: int
-    lead_time_max: int
-    min_order: int
-    max_order: int
-    reliability: float
-    
-    def get_lead_time(self) -> int:
-        base_time = random.randint(self.lead_time_min, self.lead_time_max)
-        if random.random() > self.reliability:
-            base_time += random.randint(1, 3)
-        return base_time
-    
-    def get_daily_max_order(self) -> int:
-        variation = random.uniform(0.4, 1.3)
-        return int(self.max_order * variation)
+    due_day: int
+    status: str = "Open" # Open, Shipped, Cancelled
+    shipped_day: Optional[int] = None
 
 @dataclass
-class CustomerProfile:
+class WorkOrder:
     id: str
-    name: str
-    emoji: str
-    urgency_days: int
+    product_id: str
+    qty: int
+    day_started: int
+    hours_required: int
+    hours_completed: int = 0
+    status: str = "InProgress" # InProgress, Completed
+    completion_day: int = 0
 
 @dataclass
-class CustomerOrder:
-    id: int
-    day_created: int
-    quantity: int
-    customer: CustomerProfile
-    delivery_time: int = 2
-    quantity_fulfilled: int = 0
-    status: str = "pending"
-    day_shipped: Optional[int] = None
-    expected_delivery: Optional[int] = None
-    day_delivered: Optional[int] = None
-    
-    @property
-    def remaining(self) -> int:
-        return self.quantity - self.quantity_fulfilled
-        
-    @property
-    def due_date(self) -> int:
-        return self.day_created + self.customer.urgency_days
-
-@dataclass
-class SupplierOrder:
-    id: int
-    supplier_id: str
-    day_ordered: int
-    quantity: int
+class PurchaseOrder:
+    id: str
+    material_id: str
+    qty: int
+    day_placed: int
+    lead_time: int
+    arrival_day: int
     unit_cost: float
-    expected_arrival: int
-    status: str = "in_transit"
-    day_delivered: Optional[int] = None
+    status: str = "OnOrder" # OnOrder, Received
 
 @dataclass
 class GameState:
     current_day: int = 1
     max_days: int = 30
-    inventory: int = 100
-    cash: float = 5000.0
-    selling_price: float = 20.0
-    holding_cost_per_unit: float = 0.50
-    delay_penalty: float = 15.0
-    customer_orders: List[CustomerOrder] = field(default_factory=list)
-    supplier_orders: List[SupplierOrder] = field(default_factory=list)
-    next_customer_order_id: int = 1
-    next_supplier_order_id: int = 1
-    total_revenue: float = 0.0
-    total_cost: float = 0.0
-    total_holding_cost: float = 0.0
-    total_penalties: float = 0.0
-    units_sold: int = 0
-    orders_fulfilled: int = 0
-    orders_delayed: int = 0
-    daily_events: List[str] = field(default_factory=list)
-    history: List[Dict] = field(default_factory=list)
-    supplier_availability: Dict = field(default_factory=dict)
+    cash: float = 20000.0
+    
+    # Master Data
+    materials: Dict[str, Material] = field(default_factory=dict)
+    products: Dict[str, Product] = field(default_factory=dict)
+    
+    # Inventory
+    stock_materials: Dict[str, int] = field(default_factory=dict) # {mat_id: qty}
+    stock_finished: Dict[str, int] = field(default_factory=dict) # {prod_id: qty}
+    
+    # Transactions
+    sales_orders: List[SalesOrder] = field(default_factory=list)
+    work_orders: List[WorkOrder] = field(default_factory=list)
+    purchase_orders: List[PurchaseOrder] = field(default_factory=list)
+    
+    # Capacity
+    daily_capacity_hours: int = 80 # e.g. 10 workers * 8 hours
+    
+    # Financials
+    daily_logs: List[str] = field(default_factory=list) # Audit log
+    
     game_over: bool = False
 
-# Constants
-SUPPLIERS = {
-    "dragon": Supplier("dragon", "Dragon Electronics", "🇨🇳", 8.0, 5, 7, 50, 200, 0.85),
-    "aztec": Supplier("aztec", "Aztec Components", "🇲🇽", 10.0, 2, 3, 20, 100, 0.95),
-    "fasttrack": Supplier("fasttrack", "FastTrack USA", "🇺🇸", 12.0, 1, 2, 10, 60, 0.99),
-    "precision": Supplier("precision", "PrecisionTech DE", "🇩🇪", 11.0, 3, 4, 30, 120, 0.97)
-}
+# =============================================================================
+# INITIALIZATION
+# =============================================================================
 
-CUSTOMERS = [
-    CustomerProfile("techstore", "TechStore Inc.", "🏢", 3),
-    CustomerProfile("urgent", "UrgentFlight", "🚀", 1),
-    CustomerProfile("local", "LocalShop", "🏪", 5),
-    CustomerProfile("mega", "MegaCorp", "🏭", 4)
-]
-
-# Logic Functions
-def update_supplier_availability(state: GameState):
-    state.supplier_availability = {}
-    for sid, supplier in SUPPLIERS.items():
-        daily_max = supplier.get_daily_max_order()
-        is_available = daily_max >= supplier.min_order
-        state.supplier_availability[sid] = {
-            "max_today": daily_max if is_available else 0,
-            "min": supplier.min_order,
-            "available": is_available
-        }
-
-def generate_customer_demand(day: int) -> int:
-    day_of_week = day % 7
-    if day_of_week in [1, 2, 3]:  base = random.randint(15, 35)
-    elif day_of_week in [4, 5]: base = random.randint(10, 25)
-    else: base = random.randint(5, 15)
-    if random.random() < 0.10: base = int(base * 1.5)
-    return base
-
-def create_customer_order(state: GameState, quantity: int) -> CustomerOrder:
-    customer = random.choice(CUSTOMERS)
-    order = CustomerOrder(
-        id=state.next_customer_order_id,
-        day_created=state.current_day,
-        quantity=quantity,
-        customer=customer,
-        delivery_time=2
-    )
-    state.next_customer_order_id += 1
-    state.customer_orders.append(order)
-    return order
-
-def ship_specific_order(state: GameState, order_id: int) -> bool:
-    order = next((o for o in state.customer_orders if o.id == order_id), None)
-    if not order or order.status != "pending": return False
-    if state.inventory >= order.quantity:
-        state.inventory -= order.quantity
-        order.quantity_fulfilled = order.quantity
-        order.status = "in_transit"
-        order.day_shipped = state.current_day
-        order.expected_delivery = state.current_day + order.delivery_time
-        return True
-    return False
-
-def process_supplier_deliveries(state: GameState) -> List[str]:
-    events = []
-    for order in state.supplier_orders:
-        if order.status == "in_transit" and order.expected_arrival <= state.current_day:
-            order.status = "delivered"
-            order.day_delivered = state.current_day
-            state.inventory += order.quantity
-            supplier = SUPPLIERS[order.supplier_id]
-            events.append(f"📦 Received {order.quantity} units from {supplier.emoji} {supplier.name}")
-    return events
-
-def process_customer_deliveries(state: GameState) -> List[str]:
-    events = []
-    for order in state.customer_orders:
-        if order.status == "in_transit" and order.expected_delivery <= state.current_day:
-            order.status = "delivered"
-            order.day_delivered = state.current_day
-            state.orders_fulfilled += 1
-            rev = order.quantity * state.selling_price
-            state.total_revenue += rev
-            state.cash += rev
-            state.units_sold += order.quantity
-            events.append(f"✅ Order #{order.id} delivered to {order.customer.name}")
-    return events
-
-def calculate_daily_penalties(state: GameState) -> List[str]:
-    events = []
-    for order in state.customer_orders:
-        if order.status == "pending" and state.current_day > order.day_created + 1:
-            state.total_penalties += state.delay_penalty
-            state.cash -= state.delay_penalty
-            events.append(f"⚠️ Late Penalty: Order #{order.id} -${state.delay_penalty:.0f}")
-    return events
-
-def calculate_holding_costs(state: GameState) -> float:
-    cost = state.inventory * state.holding_cost_per_unit
-    state.total_holding_cost += cost
-    state.cash -= cost
-    return cost
-
-def place_supplier_order(state: GameState, supplier_id: str, quantity: int) -> Optional[SupplierOrder]:
-    if quantity <= 0: return None
-    supplier = SUPPLIERS[supplier_id]
-    if quantity < supplier.min_order: return None
-    cost = quantity * supplier.unit_price
-    if state.cash < cost: return None
-    state.cash -= cost
-    state.total_cost += cost
-    arrival = state.current_day + supplier.get_lead_time()
-    order = SupplierOrder(
-        id=state.next_supplier_order_id,
-        supplier_id=supplier_id,
-        day_ordered=state.current_day,
-        quantity=quantity,
-        unit_cost=supplier.unit_price,
-        expected_arrival=arrival
-    )
-    state.next_supplier_order_id += 1
-    state.supplier_orders.append(order)
-    return order
-
-def get_kpis(state: GameState) -> Dict:
-    pending = [o for o in state.customer_orders if o.status == "pending"]
-    delivered = [o for o in state.customer_orders if o.status == "delivered"]
-    in_transit = [o for o in state.customer_orders if o.status == "in_transit"]
-    profit = state.total_revenue - state.total_cost - state.total_holding_cost - state.total_penalties
-    fill_rate = (len(delivered)+len(in_transit))/len(state.customer_orders)*100 if state.customer_orders else 100
-    return {
-        "inventory": state.inventory,
-        "cash": state.cash,
-        "profit": profit,
-        "revenue": state.total_revenue,
-        "costs": state.total_cost,
-        "holding_costs": state.total_holding_cost,
-        "penalties": state.total_penalties,
-        "fill_rate": fill_rate,
-        "orders_pending": len(pending),
-        "incoming_qty": sum(o.quantity for o in state.supplier_orders if o.status == "in_transit")
+def init_game() -> GameState:
+    state = GameState()
+    
+    # 1. Setup Materials (Raw Goods)
+    state.materials = {
+        "M01": Material("M01", "Steel Pipe", 15.0, "pcs"),
+        "M02": Material("M02", "Rubber Tire", 8.0, "pcs"),
+        "M03": Material("M03", "Leather Seat", 12.0, "pcs"),
+        "M04": Material("M04", "Paint Pack", 5.0, "L"),
     }
+    
+    # 2. Setup Products (Finished Goods)
+    state.products = {
+        "P01": Product("P01", "City Bike", 180.0, {"M01": 2, "M02": 2, "M03": 1, "M04": 1}, 4), # 4 hours to make
+        "P02": Product("P02", "Pro Racer", 350.0, {"M01": 3, "M02": 2, "M03": 1, "M04": 2}, 6), # 6 hours to make
+    }
+    
+    # 3. Initial Inventory
+    state.stock_materials = {
+        "M01": 20,
+        "M02": 20,
+        "M03": 10,
+        "M04": 10
+    }
+    state.stock_finished = {
+        "P01": 5,
+        "P02": 2
+    }
+    
+    # 4. Generate starting demand
+    generate_daily_demand(state)
+    
+    return state
 
-def save_day_snapshot(state: GameState, kpis: Dict):
-    state.history.append({"day": state.current_day, **kpis})
+def generate_daily_demand(state: GameState):
+    """Generates random sales orders for the day"""
+    # 1-3 Orders per day
+    num_orders = random.randint(1, 3)
+    
+    customers = ["BikeWorld", "CitySports", "EcoRide", "UrbanOutfitters"]
+    
+    for _ in range(num_orders):
+        prod_id = random.choice(list(state.products.keys()))
+        qty = random.randint(1, 5)
+        
+        # Rush order?
+        is_rush = random.random() < 0.2
+        due_offset = 2 if is_rush else random.randint(3, 7)
+        
+        so = SalesOrder(
+            id=f"SO-{state.current_day}-{random.randint(100,999)}",
+            day_placed=state.current_day,
+            customer_name=random.choice(customers),
+            product_id=prod_id,
+            qty=qty,
+            unit_price=state.products[prod_id].price,
+            due_day=state.current_day + due_offset
+        )
+        state.sales_orders.append(so)
+        state.daily_logs.append(f"🆕 New Order: {so.customer_name} wants {qty}x {state.products[prod_id].name} (Due Day {so.due_day})")
+
+# =============================================================================
+# MECHANICS: ACTIONS
+# =============================================================================
+
+def buy_material(state: GameState, material_id: str, qty: int) -> Tuple[bool, str]:
+    """Place a PO for materials"""
+    if qty <= 0: return False, "Qty must be > 0"
+    
+    mat = state.materials.get(material_id)
+    cost = mat.cost * qty
+    
+    if state.cash < cost:
+        return False, "Insufficient Cash"
+    
+    # Deduct cash immediately (Simple model) or AP? 
+    # Let's deduct on receipt to be friendlier? No, let's allow "Net 30" (Pay later)?
+    # For simplicity, deduct 50% now, 50% later? 
+    # Let's keep it simple: Deduct NOW (Cash basis) to force cash management.
+    
+    state.cash -= cost
+    
+    lead_time = random.randint(2, 4)
+    arrival = state.current_day + lead_time
+    
+    po = PurchaseOrder(
+        id=f"PO-{state.current_day}-{random.randint(1000,9999)}",
+        material_id=material_id,
+        qty=qty,
+        day_placed=state.current_day,
+        lead_time=lead_time,
+        arrival_day=arrival,
+        unit_cost=mat.cost
+    )
+    state.purchase_orders.append(po)
+    state.daily_logs.append(f"💸 Bought {qty}x {mat.name} for ${cost:.0f}. Arrival: Day {arrival}")
+    return True, "Order Placed"
+
+def create_work_order(state: GameState, product_id: str, qty: int) -> Tuple[bool, str]:
+    """Schedule production"""
+    if qty <= 0: return False, "Qty must be > 0"
+    
+    prod = state.products.get(product_id)
+    
+    # 1. Check Materials
+    for mat_id, needed in prod.bom.items():
+        total_needed = needed * qty
+        if state.stock_materials.get(mat_id, 0) < total_needed:
+            return False, f"Missing Material: {state.materials[mat_id].name} (Need {total_needed})"
+            
+    # 2. Consume Materials
+    for mat_id, needed in prod.bom.items():
+        state.stock_materials[mat_id] -= (needed * qty)
+        
+    # 3. Create WO
+    total_hours = prod.production_hours * qty
+    
+    wo = WorkOrder(
+        id=f"WO-{state.current_day}-{random.randint(1000,9999)}",
+        product_id=product_id,
+        qty=qty,
+        day_started=state.current_day,
+        hours_required=total_hours
+    )
+    state.work_orders.append(wo)
+    state.daily_logs.append(f"🔧 Started Production: {qty}x {prod.name} (Requires {total_hours} hrs)")
+    return True, "Production Started"
+
+def ship_order(state: GameState, so_id: str) -> Tuple[bool, str]:
+    """Ship a sales order to customer"""
+    so = next((o for o in state.sales_orders if o.id == so_id), None)
+    if not so: return False, "Order not found"
+    if so.status != "Open": return False, "Order not open"
+    
+    # Check Finished Stock
+    if state.stock_finished.get(so.product_id, 0) < so.qty:
+        return False, "Not enough stock"
+        
+    # Ship it
+    state.stock_finished[so.product_id] -= so.qty
+    so.status = "Shipped"
+    so.shipped_day = state.current_day
+    
+    # Recognize Revenue
+    revenue = so.qty * so.unit_price
+    state.cash += revenue
+    
+    state.daily_logs.append(f"🚚 Shipped {so.customer_name}: +${revenue:.0f}")
+    return True, "Shipped!"
+
+# =============================================================================
+# MECHANICS: TURN PROCESSING
+# =============================================================================
+
+def process_daily_turn(state: GameState):
+    """Advance the day"""
+    state.daily_logs.clear()
+    
+    # 1. New Demand
+    generate_daily_demand(state)
+    
+    # 2. Receive Materials
+    arrived_pos = []
+    for po in state.purchase_orders:
+        if po.status == "OnOrder" and state.current_day >= po.arrival_day:
+            po.status = "Received"
+            state.stock_materials[po.material_id] = state.stock_materials.get(po.material_id, 0) + po.qty
+            arrived_pos.append(po)
+            # state.daily_logs.append(f"🚛 Received {po.qty}x {state.materials[po.material_id].name}")
+            
+    if arrived_pos:
+        state.daily_logs.append(f"🚛 {len(arrived_pos)} Inbound Deliveries Processed")
+
+    # 3. Advance Production (Capacity constraint)
+    # We allocate today's 80 hours to open Work Orders
+    available_hours = state.daily_capacity_hours
+    
+    active_wos = [wo for wo in state.work_orders if wo.status == "InProgress"]
+    # Simple FIFO allocation
+    for wo in active_wos:
+        if available_hours <= 0: break
+        
+        remaining_work = wo.hours_required - wo.hours_completed
+        work_to_do = min(available_hours, remaining_work)
+        
+        wo.hours_completed += work_to_do
+        available_hours -= work_to_do
+        
+        # Check completion
+        if wo.hours_completed >= wo.hours_required:
+            wo.status = "Completed"
+            wo.completion_day = state.current_day
+            state.stock_finished[wo.product_id] = state.stock_finished.get(wo.product_id, 0) + wo.qty
+            state.daily_logs.append(f"✅ Production Finished: {wo.qty}x {state.products[wo.product_id].name}")
+
+    # 4. Advance Date
+    state.current_day += 1
+    if state.current_day > state.max_days:
+        state.game_over = True
+
+def get_csv_export(state: GameState) -> str:
+    """Export all transaction data to CSV"""
+    data = []
+    
+    # 1. Sales
+    for so in state.sales_orders:
+        data.append({
+            "Type": "SalesOrder",
+            "ID": so.id,
+            "Day_Placed": so.day_placed,
+            "Item": state.products[so.product_id].name,
+            "Qty": so.qty,
+            "Value": so.qty * so.unit_price,
+            "Status": so.status
+        })
+        
+    # 2. Production
+    for wo in state.work_orders:
+        data.append({
+            "Type": "WorkOrder",
+            "ID": wo.id,
+            "Day_Placed": wo.day_started,
+            "Item": state.products[wo.product_id].name,
+            "Qty": wo.qty,
+            "Value": 0, # Internal
+            "Status": wo.status
+        })
+        
+    # 3. Purchasing
+    for po in state.purchase_orders:
+        data.append({
+            "Type": "PurchaseOrder",
+            "ID": po.id,
+            "Day_Placed": po.day_placed,
+            "Item": state.materials[po.material_id].name,
+            "Qty": po.qty,
+            "Value": -(po.qty * po.unit_cost), # Cost
+            "Status": po.status
+        })
+        
+    df = pd.DataFrame(data)
+    return df.to_csv(index=False)

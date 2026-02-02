@@ -29,7 +29,7 @@ state = st.session_state.srm_state
 # SIDEBAR CONTROLS
 # =============================================================================
 with st.sidebar:
-    st.title("🏭 SAP SRM")
+    st.title("🏭 SRM")
     st.caption("Advanced Procurement Sim")
     st.divider()
     

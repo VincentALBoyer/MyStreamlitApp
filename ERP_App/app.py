@@ -1,357 +1,267 @@
 import streamlit as st
 import pandas as pd
-import random
 import logic
 
-# -----------------------------------------------------------------------------
-# PAGE CONFIGURATION (PROFESSIONAL & HIGH CONTRAST)
-# -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title="SAP S/4HANA Simulation | ERP Console",
-    page_icon="🏭",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="ERP Sim | Enterprise Management", page_icon="🏭", layout="wide")
 
-# Theme-Agnostic High-Contrast Styling (Works in Light & Dark Modes)
+# Styling
 st.markdown("""
 <style>
-    /* === FORCE LIGHT THEME GLOBALLY === */
-    .stApp, [data-testid="stAppViewContainer"], .main {
-        background-color: #f8f9fa !important;
-        color: #1a1a1a !important;
-    }
-    
-    /* Force all text elements to dark */
-    p, span, div, label, li, h1, h2, h3, h4, h5, h6 {
-        color: #1a1a1a !important;
-    }
-    
-    /* Header - Deep Navy with White Text */
-    .sap-header { 
-        background-color: #1c2d3d !important; 
-        color: #ffffff !important; 
-        padding: 1.5rem; 
-        border-bottom: 5px solid #0070f2;
-        margin-bottom: 25px;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .sap-header h2 { color: #ffffff !important; margin: 0; }
-    
-    /* Metrics - Force Dark Text */
-    [data-testid="stMetricValue"] { 
-        color: #1c2d3d !important; 
-        font-weight: 800; 
-        font-size: 1.8rem; 
-    }
-    [data-testid="stMetricLabel"] { 
-        color: #555555 !important; 
-        font-size: 0.9rem; 
-    }
-    
-    /* Containers & Cards - White Background */
-    [data-testid="stVerticalBlock"] > div {
-        background-color: #ffffff !important;
-    }
-    .element-container, [data-testid="stMarkdownContainer"] {
-        color: #1a1a1a !important;
-    }
-    
-    /* Tables - White Background, Dark Text */
-    .stDataFrame, [data-testid="stTable"], table {
-        background-color: #ffffff !important;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-    }
-    .stDataFrame table, .stDataFrame th, .stDataFrame td,
-    [data-testid="stTable"] table, [data-testid="stTable"] th, [data-testid="stTable"] td,
-    table, th, td {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border-color: #dee2e6 !important;
-    }
-    
-    /* Sidebar - White Background */
-    [data-testid="stSidebar"] { 
-        background-color: #ffffff !important; 
-        border-right: 1px solid #dee2e6;
-    }
-    [data-testid="stSidebar"] * { 
-        color: #1c2d3d !important; 
-    }
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        color: #1c2d3d !important;
-    }
-
-    /* Action Buttons - Professional Blue with White Text */
-    .stButton > button { 
-        border-radius: 2px; 
-        height: 3rem; 
-        font-weight: 600;
-        color: #ffffff !important;
-        background-color: #0070f2 !important;
-        border: none !important;
-    }
-    .stButton > button:hover {
-        background-color: #0056b3 !important;
-        color: #ffffff !important;
-    }
-    .stButton > button[kind="primary"] {
-        background-color: #0070f2 !important;
-        color: #ffffff !important;
-    }
-    .stButton > button:disabled {
-        background-color: #e9ecef !important;
-        color: #6c757d !important;
-    }
-    
-    /* Input Fields - White Background */
-    input, textarea, select, [data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border: 1px solid #dee2e6 !important;
-    }
-    
-    /* Number Input */
-    [data-testid="stNumberInput"] input {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-    
-    /* Info/Success/Error Boxes */
-    [data-testid="stAlert"] {
-        background-color: #ffffff !important;
-    }
+    .stApp { background-color: #fce4ec; } /* Light pink/red tint for ERP distinction */
+    .metric-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; }
+    .status-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; }
+    .badge-green { background-color: #d5f5e3; color: #1e8449; }
+    .badge-yellow { background-color: #fcf3cf; color: #b7950b; }
+    .badge-red { background-color: #fadbd8; color: #922b21; }
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# SESSION STATE INITIALIZATION
-# -----------------------------------------------------------------------------
-if 'game_state' not in st.session_state:
-    st.session_state.game_state = logic.GameState()
-    state = st.session_state.game_state
-    # Init demand
-    logic.update_supplier_availability(state)
-    d = logic.generate_customer_demand(1)
-    logic.create_customer_order(state, d)
-    kpis = logic.get_kpis(state)
-    logic.save_day_snapshot(state, kpis)
+if 'erp_state' not in st.session_state:
+    st.session_state.erp_state = logic.init_game()
 
-state = st.session_state.game_state
+state = st.session_state.erp_state
 
-# -----------------------------------------------------------------------------
-# CALBACKS & ACTION HANDLERS
-# -----------------------------------------------------------------------------
-def handle_ship(order_id):
-    if logic.ship_specific_order(state, order_id):
-        st.toast(f"✅ Order #{order_id} Shipped!", icon="🚚")
-    else:
-        st.error("Insufficient stock to ship order.")
-
-def handle_ship_all():
-    pending = [o for o in state.customer_orders if o.status == "pending"]
-    pending.sort(key=lambda x: x.due_date)
-    count = 0
-    for o in pending:
-        if logic.ship_specific_order(state, o.id):
-            count += 1
-    if count > 0:
-        st.toast(f"✅ Batch Shipped {count} orders!", icon="🚀")
-    else:
-        st.error("Cannot ship any orders. Bulk up inventory.")
-
-def handle_next_day():
-    state.daily_events = []
-    
-    # Advance Logic
-    state.current_day += 1
-    logic.update_supplier_availability(state)
-    state.daily_events.extend(logic.process_supplier_deliveries(state))
-    state.daily_events.extend(logic.process_customer_deliveries(state))
-    
-    # 3. New Demand
-    base = logic.generate_customer_demand(state.current_day)
-    # Surge logic replication
-    if random.random() < 0.15:
-        base = int(base * 2.5)
-        state.daily_events.append("🚨 MARKET ALERT: Unexpected demand surge detected!")
-    
-    num_o = random.randint(1, 4)
-    for _ in range(num_o):
-        qty = max(5, int(base / num_o * random.uniform(0.8, 1.2)))
-        logic.create_customer_order(state, qty)
-    
-    # 4. End-of-Day costs
-    logic.calculate_holding_costs(state)
-    state.daily_events.extend(logic.calculate_daily_penalties(state))
-    
-    # Snapshot
-    logic.save_day_snapshot(state, logic.get_kpis(state))
-    
-    if state.current_day >= state.max_days:
-        state.game_over = True
-
-# -----------------------------------------------------------------------------
-# SIDEBAR NAVIGATION
-# -----------------------------------------------------------------------------
+# =============================================================================
+# SIDEBAR
+# =============================================================================
 with st.sidebar:
-    st.markdown("### 🏢 S/4HANA INTERFACE")
+    st.title("🏭 ERP Sim")
+    st.caption("Enterprise Resource Planning")
     st.divider()
-    menu = st.radio("Business Modules", [
-        "📊 Executive Cockpit",
-        "📦 Warehouse & Shipping",
-        "🛒 Procurement Center",
-        "📑 Audit Logs"
+    
+    menu = st.radio("Module", [
+        "📊 Dashboard", 
+        "📦 Sales & Shipping",
+        "🏭 Production", 
+        "🛒 Purchasing", 
+        "💰 Finance"
     ])
     
     st.divider()
-    st.subheader("Fiscal Period")
     st.metric("Day", f"{state.current_day} / {state.max_days}")
-    st.metric("Liquid Cash", f"${state.cash:,.0f}")
+    st.metric("Bank Balance", f"${state.cash:,.2f}")
     
     if not state.game_over:
-        st.button("➡️ RUN DAILY BATCH", type="primary", use_container_width=True, on_click=handle_next_day)
+        if st.button("➡️ NEXT DAY", type="primary", use_container_width=True):
+            logic.process_daily_turn(state)
+            st.rerun()
     else:
-        st.error("Month Complete (30 Days)")
-        if st.button("🔄 Reset Simulation", use_container_width=True):
-            del st.session_state.game_state
+        st.error("GAME OVER")
+        
+        # LOG EXPORT
+        csv = logic.get_csv_export(state)
+        st.download_button("📥 Download Log", csv, "erp_simulation_log.csv", "text/csv", use_container_width=True)
+        
+        if st.button("🔄 Reset"):
+            del st.session_state.erp_state
             st.rerun()
 
-# -----------------------------------------------------------------------------
-# MAIN DASHBOARD
-# -----------------------------------------------------------------------------
-kpis = logic.get_kpis(state)
+# =============================================================================
+# MAIN CONTENT
+# =============================================================================
 
-if menu == "📊 Executive Cockpit":
-    st.markdown("<div class='sap-header'><h2>Management Dashboard</h2></div>", unsafe_allow_html=True)
+if menu == "📊 Dashboard":
+    st.subheader("📊 Executive Dashboard")
     
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Financial Profit", f"${kpis['profit']:,.0f}")
-    c2.metric("Inventory Volume", kpis['inventory'])
-    c3.metric("Service Level (Fill)", f"{kpis['fill_rate']:.1f}%")
-    c4.metric("Unshipped Depth", kpis['orders_pending'])
+    # KPIs
+    k1, k2, k3, k4 = st.columns(4)
+    
+    open_orders = len([o for o in state.sales_orders if o.status == "Open"])
+    wip_orders = len([w for w in state.work_orders if w.status == "InProgress"])
+    stock_value = sum(qty * state.materials[mid].cost for mid, qty in state.stock_materials.items())
+    
+    k1.metric("Open Orders", open_orders)
+    k2.metric("WIP Jobs", wip_orders)
+    k3.metric("Raw Material Value", f"${stock_value:,.0f}")
+    k4.metric("Cash", f"${state.cash:,.0f}")
     
     st.divider()
     
-    col_plot, col_log = st.columns([2, 1])
-    with col_plot:
-        st.markdown("### 📈 Performance Trends")
-        if state.history:
-            df_hist = pd.DataFrame(state.history)
-            st.line_chart(df_hist.set_index("day")[["profit", "cash"]], height=300)
-    with col_log:
-        st.markdown("### 📜 System Notifications")
-        with st.container(height=300):
-            if state.daily_events:
-                for e in reversed(state.daily_events):
-                    st.write(e)
-            else:
-                st.caption("Awaiting first system batch...")
-
-elif menu == "📦 Warehouse & Shipping":
-    st.markdown("<div class='sap-header'><h2>Outbound Logistics: Shipping Station</h2></div>", unsafe_allow_html=True)
+    # Inventory Quick View
+    st.write("##### 📦 Current Inventory Levels")
+    c_raw, c_fin = st.columns(2)
     
-    col_info, col_batch = st.columns([3, 1])
-    with col_info:
-        st.markdown(f"Available Stock: **{state.inventory} units**")
-    with col_batch:
-        st.button("🚀 Bulk Ship Available", on_click=handle_ship_all, use_container_width=True, type="primary")
+    with c_raw:
+        st.caption("🧱 Raw Materials")
+        raw_data = [{"Item": state.materials[m].name, "Qty": q} for m, q in state.stock_materials.items()]
+        st.dataframe(pd.DataFrame(raw_data), use_container_width=True, hide_index=True)
+        
+    with c_fin:
+        st.caption("🚲 Finished Goods")
+        fin_data = [{"Item": state.products[p].name, "Qty": q} for p, q in state.stock_finished.items()]
+        st.dataframe(pd.DataFrame(fin_data), use_container_width=True, hide_index=True)
 
     st.divider()
     
-    pending = [o for o in state.customer_orders if o.status == "pending"]
-    if not pending:
-        st.success("Logistics Clear: No pending orders.")
+    # Log
+    st.write("##### 📝 Daily Activity Log")
+    with st.container(height=300):
+        if state.daily_logs:
+            for log in reversed(state.daily_logs):
+                st.write(f"- {log}")
+        else:
+            st.caption("No recent activity.")
+
+elif menu == "📦 Sales & Shipping":
+    st.subheader("📦 Sales Order Management")
+    st.caption("Fulfill customer demand. Ship orders to generate revenue.")
+    
+    # Inventory Check
+    st.write("##### Finished Goods Inventory")
+    cols = st.columns(len(state.products))
+    for i, (pid, qty) in enumerate(state.stock_finished.items()):
+        prod = state.products[pid]
+        cols[i].metric(prod.name, f"{qty} units", help=f"Price: ${prod.price}")
+    
+    st.divider()
+    
+    # Order List
+    st.write("##### 📋 Open Orders")
+    open_orders = [o for o in state.sales_orders if o.status == "Open"]
+    
+    if not open_orders:
+        st.success("All orders shipped! Good job.")
     else:
-        pending.sort(key=lambda x: x.due_date)
-        for o in pending:
+        for order in open_orders:
+            prod = state.products[order.product_id]
+            is_overdue = state.current_day > order.due_day
+            
             with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([2, 1, 1.5, 1])
-                c1.write(f"**{o.customer.emoji} {o.customer.name}** (#{o.id})")
-                c2.write(f"Qty: **{o.quantity}**")
+                c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
+                c1.markdown(f"**{order.customer_name}**")
+                c1.caption(f"Order #{order.id}")
                 
-                due_in = o.due_date - state.current_day
-                color = "#d32f2f" if due_in < 1 else "#ed6c02" if due_in < 3 else "#2e7d32"
-                c3.markdown(f"Due: Day {o.due_date} (<span style='color:{color}'>{due_in}d</span>)", unsafe_allow_html=True)
+                c2.write(f"{order.qty}x {prod.name}")
                 
-                can_ship = state.inventory >= o.quantity
-                if c4.button("Post Shipment", key=f"s_{o.id}", disabled=not can_ship, use_container_width=True):
-                    handle_ship(o.id)
-                    st.rerun()
-
-elif menu == "🛒 Procurement Center":
-    st.markdown("<div class='sap-header'><h2>Inbound Logistics: Supplier Market</h2></div>", unsafe_allow_html=True)
-    
-    st.markdown("### Approved Supplier Network")
-    st.info("Orders placed here enter 'In-Transit' immediately.")
-    
-    sc1, sc2 = st.columns(2)
-    suppliers = list(logic.SUPPLIERS.items())
-    
-    for i, (sid, s) in enumerate(suppliers):
-        col = sc1 if i % 2 == 0 else sc2
-        with col:
-            with st.container(border=True):
-                avail = state.supplier_availability.get(sid, {})
-                st.markdown(f"#### {s.emoji} {s.name}")
+                due_color = "red" if is_overdue else "green"
+                c3.markdown(f"Due: <span style='color:{due_color}'>Day {order.due_day}</span>", unsafe_allow_html=True)
                 
-                # Show Specs explicitly
-                c1, c2 = st.columns(2)
-                c1.metric("Min Order", s.min_order)
-                c2.metric("Max Capacity", avail.get('max_today', 0))
+                val = order.qty * order.unit_price
+                c4.write(f"${val:,.0f}")
                 
-                c3, c4 = st.columns(2)
-                c3.metric("Unit Price", f"${s.unit_price}")
-                c4.metric("Lead Time", f"{s.lead_time_min}-{s.lead_time_max}d")
+                # Check Availability
+                in_stock = state.stock_finished.get(order.product_id, 0)
+                can_ship = in_stock >= order.qty
                 
-                if avail.get('available'):
-                    order_qty = st.number_input(f"Order Quantity ({sid})", 
-                                              min_value=0, max_value=avail['max_today'], 
-                                              step=10, key=f"input_{sid}", label_visibility="collapsed")
-                    
-                    if st.button(f"🛒 Place Order with {s.id}", key=f"btn_{sid}", use_container_width=True):
-                        if order_qty >= s.min_order:
-                            if logic.place_supplier_order(state, sid, order_qty):
-                                st.success(f"Order for {order_qty} units transmitted to {s.name}.")
-                                st.rerun()
-                            else:
-                                st.error("Financial Constraint: Insufficient cash.")
+                if can_ship:
+                    if c5.button("🚀 SHIP", key=f"ship_{order.id}", type="primary"):
+                        success, msg = logic.ship_order(state, order.id)
+                        if success:
+                            st.toast(f"Shipped to {order.customer_name}!")
+                            st.rerun()
                         else:
-                            st.warning(f"Quantity below Minimum Order ({s.min_order}).")
+                            st.error(msg)
                 else:
-                    st.error("Supplier Unavailable (Capacity Constraint met).")
+                    c5.button("⏳ Short", disabled=True, key=f"no_ship_{order.id}")
 
+elif menu == "🏭 Production":
+    st.subheader("🏭 Factory Floor")
+    st.caption(f"Capacity: {state.daily_capacity_hours} hrs/day")
+    
+    # 1. Create Work Order
+    st.write("##### 🔨 Schedule Production")
+    with st.form("new_wo"):
+        c1, c2, c3 = st.columns(3)
+        prod_choice = c1.selectbox("Product", list(state.products.keys()), format_func=lambda x: state.products[x].name)
+        qty = c2.number_input("Quantity", min_value=1, value=5)
+        
+        # Show Requirements
+        prod = state.products[prod_choice]
+        req_str = ", ".join([f"{q*qty}x {state.materials[m].name}" for m, q in prod.bom.items()])
+        c3.caption(f"Requires: {req_str}")
+        c3.caption(f"Time: {prod.production_hours * qty} hours")
+        
+        submitted = st.form_submit_button("Start Production")
+        if submitted:
+            success, msg = logic.create_work_order(state, prod_choice, qty)
+            if success:
+                st.success(f"Work Order Created! {msg}")
+                st.rerun()
+            else:
+                st.error(msg)
+    
     st.divider()
-    st.markdown("### 🚛 In-Transit Supply (Active Orders)")
-    inc = [o for o in state.supplier_orders if o.status == "in_transit"]
-    if inc:
-        # Sort by arrival day
-        inc_data = [{
-            "PO #": o.id, 
-            "Vendor": logic.SUPPLIERS[o.supplier_id].name, 
-            "Quantity": o.quantity, 
-            "Est. Arrival": f"Day {o.expected_arrival}",
-            "Status": "On Ship" if (o.expected_arrival - state.current_day) > 2 else "In Port"
-        } for o in sorted(inc, key=lambda x: x.expected_arrival)]
-        st.table(pd.DataFrame(inc_data))
+    
+    # 2. Work In Progress
+    st.write("##### ⚙️ Work In Progress")
+    wip = [w for w in state.work_orders if w.status == "InProgress"]
+    
+    if not wip:
+        st.info("Floor is quiet.")
     else:
-        st.caption("No pending supplier deliveries.")
+        # Calculate total load
+        total_backlog = sum(w.hours_required - w.hours_completed for w in wip)
+        st.progress(min(1.0, total_backlog / (state.daily_capacity_hours * 5)), text=f"Backlog Load: {total_backlog} hours")
+        
+        for wo in wip:
+            prod = state.products[wo.product_id]
+            pct = wo.hours_completed / wo.hours_required
+            st.write(f"**{prod.name}** ({wo.qty} units)")
+            st.progress(pct, text=f"{int(pct*100)}% ({wo.hours_completed}/{wo.hours_required} hrs)")
 
-elif menu == "📑 Audit Logs":
-    st.markdown("<div class='sap-header'><h2>Regulatory Audit & Data Export</h2></div>", unsafe_allow_html=True)
+elif menu == "🛒 Purchasing":
+    st.subheader("🛒 Procurement (MRP)")
+    st.caption("Buy raw materials to ensure production continuity.")
     
-    st.markdown("### Master Data Exports")
-    c1, c2 = st.columns(2)
-    with c1:
-        csv_o = pd.DataFrame([vars(o) for o in state.customer_orders]).to_csv(index=False)
-        st.download_button("📥 Export Customer Orders", csv_o, "Audit_Orders.csv")
-    with c2:
-        csv_s = pd.DataFrame([vars(o) for o in state.supplier_orders]).to_csv(index=False)
-        st.download_button("📥 Export Supplier POs", csv_s, "Audit_Suppliers.csv")
-    
+    # 1. Inventory View
+    st.write("##### 🧱 Raw Material Inventory")
+    inv_cols = st.columns(len(state.materials))
+    for i, (mid, mat) in enumerate(state.materials.items()):
+        qty = state.stock_materials.get(mid, 0)
+        with inv_cols[i]:
+            st.metric(mat.name, f"{qty} {mat.unit}", f"${mat.cost}/u")
+            
+            # Quick Buy
+            with st.popover(f"Buy {mat.name}"):
+                buy_qty = st.number_input("Qty", min_value=10, step=10, key=f"buy_{mid}")
+                if st.button("Order", key=f"btn_buy_{mid}"):
+                    success, msg = logic.buy_material(state, mid, buy_qty)
+                    if success:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
     st.divider()
-    st.markdown("### Historical Performance")
-    if state.history:
-        st.dataframe(pd.DataFrame(state.history), use_container_width=True, hide_index=True)
+    
+    # 2. Inbound Orders
+    st.write("##### 🚛 Inbound Deliveries")
+    inbound = [p for p in state.purchase_orders if p.status == "OnOrder"]
+    if inbound:
+        data = [{
+            "Material": state.materials[p.material_id].name,
+            "Qty": p.qty,
+            "Arrival": f"Day {p.arrival_day}",
+            "Cost": f"${p.qty * p.unit_cost:.0f}"
+        } for p in inbound]
+        st.table(data)
+    else:
+        st.caption("No incoming shipments.")
+
+elif menu == "💰 Finance":
+    st.subheader("💰 Financial Statement")
+    
+    # Simple P&L
+    
+    # Calculate Revenue
+    revenue = sum(o.qty * o.unit_price for o in state.sales_orders if o.status == "Shipped")
+    
+    # Calculate COGS (Standard Cost)
+    # Estimate based on shipped items
+    cogs = 0
+    shipped = [o for o in state.sales_orders if o.status == "Shipped"]
+    for o in shipped:
+        prod = state.products[o.product_id]
+        # Sum material costs
+        mat_cost = sum(state.materials[m].cost * q for m, q in prod.bom.items())
+        cogs += mat_cost * o.qty
+        
+    gross_margin = revenue - cogs
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Revenue", f"${revenue:,.0f}")
+    c2.metric("COGS (Est)", f"${cogs:,.0f}")
+    
+    delta_color = "normal" if gross_margin >= 0 else "inverse"
+    c3.metric("Gross Profit", f"${gross_margin:,.0f}", delta_color=delta_color)
+
