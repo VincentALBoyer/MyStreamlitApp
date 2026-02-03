@@ -159,26 +159,46 @@ elif menu == "🏭 Production":
     st.caption(f"Capacity: {state.daily_capacity_hours} hrs/day")
     
     # 1. Create Work Order
+    # 1. Create Work Order
     st.write("##### 🔨 Schedule Production")
-    with st.form("new_wo"):
-        c1, c2, c3 = st.columns(3)
-        prod_choice = c1.selectbox("Product", list(state.products.keys()), format_func=lambda x: state.products[x].name)
-        qty = c2.number_input("Quantity", min_value=1, value=5)
+    
+    # Use columns without form to allow dynamic updates
+    c1, c2, c3 = st.columns([1, 1, 2])
+    
+    with c1:
+        prod_choice = st.selectbox("Product", list(state.products.keys()), format_func=lambda x: state.products[x].name)
+    
+    with c2:
+        qty = st.number_input("Quantity", min_value=1, value=5)
         
-        # Show Requirements
-        prod = state.products[prod_choice]
-        req_str = ", ".join([f"{q*qty}x {state.materials[m].name}" for m, q in prod.bom.items()])
-        c3.caption(f"Requires: {req_str}")
-        c3.caption(f"Time: {prod.production_hours * qty} hours")
+    prod = state.products[prod_choice]
+    
+    # Dynamic Requirements Check
+    with c3:
+        st.caption("🧱 Material Availability Check")
+        can_produce = True
         
-        submitted = st.form_submit_button("Start Production")
-        if submitted:
-            success, msg = logic.create_work_order(state, prod_choice, qty)
-            if success:
-                st.success(f"Work Order Created! {msg}")
-                st.rerun()
+        for m_id, m_unit_qty in prod.bom.items():
+            total_needed = m_unit_qty * qty
+            available = state.stock_materials.get(m_id, 0)
+            mat_name = state.materials[m_id].name
+            
+            if total_needed > available:
+                can_produce = False
+                st.markdown(f"⚠️ :red[**{mat_name}**: Need {total_needed} / Avail {available}]")
             else:
-                st.error(msg)
+                st.markdown(f"✅ :green[{mat_name}: {total_needed} / {available}]")
+        
+        st.caption(f"⏱️ Est. Time: {prod.production_hours * qty} hours")
+
+    # Action Button
+    if st.button("Start Production", type="primary", disabled=not can_produce):
+        success, msg = logic.create_work_order(state, prod_choice, qty)
+        if success:
+            st.success(f"Work Order Created! {msg}")
+            st.rerun()
+        else:
+            st.error(msg)
     
     st.divider()
     
