@@ -288,44 +288,68 @@ def process_daily_turn(state: GameState):
         state.game_over = True
 
 def get_csv_export(state: GameState) -> str:
-    """Export all transaction data to CSV"""
+    """Export all transaction data as a chronological blockchain-style ledger"""
     data = []
     
-    # 1. Sales
+    # helper to add row
+    def add_row(day, type_, ref_id, details, cash_impact=0.0):
+        data.append({
+            "Day": day,
+            "Event_Type": type_,
+            "Ref_ID": ref_id,
+            "Details": details,
+            "Cash_Impact": cash_impact
+        })
+    
+    # 1. Sales Orders (Placed & Shipped)
     for so in state.sales_orders:
-        data.append({
-            "Type": "SalesOrder",
-            "ID": so.id,
-            "Day_Placed": so.day_placed,
-            "Item": state.products[so.product_id].name,
-            "Qty": so.qty,
-            "Value": so.qty * so.unit_price,
-            "Status": so.status
-        })
+        prod_name = state.products[so.product_id].name
+        # Event: Order Received
+        add_row(so.day_placed, "New Sales Order", so.id, 
+               f"Customer {so.customer_name} ordered {so.qty}x {prod_name}")
         
-    # 2. Production
+        # Event: Shipped
+        if so.status == "Shipped" and so.shipped_day:
+            val = so.qty * so.unit_price
+            add_row(so.shipped_day, "Order Shipped", so.id, 
+                   f"Shipped to {so.customer_name}", val)
+
+    # 2. Production (Started & Finished)
     for wo in state.work_orders:
-        data.append({
-            "Type": "WorkOrder",
-            "ID": wo.id,
-            "Day_Placed": wo.day_started,
-            "Item": state.products[wo.product_id].name,
-            "Qty": wo.qty,
-            "Value": 0, # Internal
-            "Status": wo.status
-        })
+        prod_name = state.products[wo.product_id].name
+        # Event: Start
+        add_row(wo.day_started, "Production Started", wo.id,
+               f"Started batch of {wo.qty}x {prod_name}")
         
-    # 3. Purchasing
+        # Event: Finish
+        if wo.status == "Completed" and wo.completion_day:
+             add_row(wo.completion_day, "Production Finished", wo.id,
+                    f"Completed {wo.qty}x {prod_name}")
+
+    # 3. Purchasing (Placed & Received)
     for po in state.purchase_orders:
-        data.append({
-            "Type": "PurchaseOrder",
-            "ID": po.id,
-            "Day_Placed": po.day_placed,
-            "Item": state.materials[po.material_id].name,
-            "Qty": po.qty,
-            "Value": -(po.qty * po.unit_cost), # Cost
-            "Status": po.status
-        })
+        mat_name = state.materials[po.material_id].name
+        cost = po.qty * po.unit_cost
+        
+        # Event: Placed
+        add_row(po.day_placed, "PO Placed", po.id,
+               f"Ordered {po.qty}x {mat_name}", -cost) # Cash out
+        
+        # Event: Received
+        if po.status == "Received" and po.arrival_day <= state.current_day: # Arrivals are pre-set
+             add_row(po.arrival_day, "PO Received", po.id,
+                    f"Received {po.qty}x {mat_name}")
+
+    # Sort by Day, then by Type (inputs before outputs)
+    data.sort(key=lambda x: (x["Day"], x["Event_Type"]))
+    
+    # Add cumulative balance? Optional, but blockchain-y.
+    balance = 20000.0 # Starting
+    for row in data:
+        balance += row["Cash_Impact"]
+        row["Running_Balance"] = balance
         
     df = pd.DataFrame(data)
-    return df.to_csv(index=False)
+    # Reorder columns
+    cols = ["Day", "Event_Type", "Ref_ID", "Details", "Cash_Impact", "Running_Balance"]
+    return df[cols].to_csv(index=False)
