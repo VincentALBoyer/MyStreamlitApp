@@ -17,7 +17,8 @@ def drag_and_drop_scheduler(logic_data):
         "skills": t.skills_required,
         "predecessors": t.predecessors,
         "project": t.project,
-        "worker": t.assigned_worker
+        "worker": t.assigned_worker,
+        "start_time": t.start_time
     } for t_id, t in logic_data.tasks.items()})
     
     workers_json = json.dumps({w_id: {
@@ -91,7 +92,7 @@ def drag_and_drop_scheduler(logic_data):
                 background-size: var(--hour-width) 100%;
                 background-color: rgba(255, 255, 255, 0.04);
                 border-radius: 4px;
-                min-height: 70px;
+                min-height: 100px;
                 position: relative;
                 border: 1px solid rgba(255, 255, 255, 0.05);
             }}
@@ -103,7 +104,7 @@ def drag_and_drop_scheduler(logic_data):
                 cursor: grab;
                 user-select: none;
                 position: absolute;
-                height: 50px;
+                height: 80px;
                 top: 10px;
                 box-sizing: border-box;
                 display: flex;
@@ -169,9 +170,50 @@ def drag_and_drop_scheduler(logic_data):
             const workers = {workers_json};
             const HOUR_WIDTH = 40;
             
+            const projectColors = {{
+                'Project Alpha': 'rgba(59, 130, 246, 0.2)',
+                'Project Beta': 'rgba(16, 185, 129, 0.2)',
+                'Shared': 'rgba(139, 92, 246, 0.2)',
+                'Default': 'rgba(107, 114, 128, 0.2)'
+            }};
+            const projectBorderColors = {{
+                'Project Alpha': '#3b82f6',
+                'Project Beta': '#10b981',
+                'Shared': '#8b5cf6',
+                'Default': '#6b7280'
+            }};
+
             const poolEl = document.getElementById('pool');
             const lanesEl = document.getElementById('lanes');
             const rulerEl = document.getElementById('ruler');
+
+            function createTaskEl(task) {{
+                const div = document.createElement('div');
+                div.className = 'task-block';
+                div.id = task.id;
+                div.dataset.duration = task.duration;
+                div.style.width = (task.duration * HOUR_WIDTH) + 'px';
+                
+                const bgColor = projectColors[task.project] || projectColors['Default'];
+                const borderColor = projectBorderColors[task.project] || projectBorderColors['Default'];
+                div.style.backgroundColor = bgColor;
+                div.style.borderColor = borderColor;
+                
+                const skillNames = task.skills.join(', ');
+                const skillHtml = `<div class="task-info" style="color: #60a5fa;">Skills: ${{skillNames}}</div>`;
+                
+                const predNames = task.predecessors.map(pId => tasks[pId] ? tasks[pId].name : pId).join(', ');
+                const predHtml = predNames ? `<div class="task-info" style="color: #cbd5e1; font-style: italic;">Need: ${{predNames}}</div>` : '';
+
+                div.innerHTML = `
+                    <div class="task-name">${{task.name}}</div>
+                    <div class="task-info">${{task.duration}}h | ${{task.project}}</div>
+                    ${{skillHtml}}
+                    ${{predHtml}}
+                    <div class="tooltip" id="tooltip-${{task.id}}">Ready</div>
+                `;
+                return div;
+            }}
 
             // 1. Create Ruler
             for(let i=0; i<=24; i++) {{
@@ -211,21 +253,6 @@ def drag_and_drop_scheduler(logic_data):
                 }});
             }});
 
-            function createTaskEl(task) {{
-                const div = document.createElement('div');
-                div.className = 'task-block';
-                div.id = task.id;
-                div.dataset.duration = task.duration;
-                div.style.width = (task.duration * HOUR_WIDTH) + 'px';
-                
-                div.innerHTML = `
-                    <div class="task-name">${{task.name}}</div>
-                    <div class="task-info">${{task.duration}}h | ${{task.project}}</div>
-                    <div class="tooltip" id="tooltip-${{task.id}}">Ready</div>
-                `;
-                return div;
-            }}
-
             // 3. Initialize Drag and Drop with InteractJS
             interact('.task-block').draggable({{
                 listeners: {{
@@ -254,20 +281,16 @@ def drag_and_drop_scheduler(logic_data):
                     const taskEl = event.relatedTarget;
                     const laneEl = event.target;
                     
-                    // Calculate start hour based on drop position
                     const rect = laneEl.getBoundingClientRect();
                     const dropX = event.dragEvent.client.x - rect.left;
                     let startHour = Math.round(dropX / HOUR_WIDTH);
                     
-                    // Bounds check
                     startHour = Math.max(0, Math.min(startHour, 24 - parseInt(taskEl.dataset.duration)));
                     
-                    // Move element in DOM
                     taskEl.classList.remove('pool-task');
                     taskEl.style.left = (startHour * HOUR_WIDTH) + 'px';
                     laneEl.appendChild(taskEl);
                     
-                    // Update task data in local JS state
                     tasks[taskEl.id].worker = laneEl.dataset.workerId;
                     tasks[taskEl.id].start_time = startHour;
                     tasks[taskEl.id].end_time = startHour + tasks[taskEl.id].duration;
@@ -293,7 +316,6 @@ def drag_and_drop_scheduler(logic_data):
             function checkLogic() {{
                 const laneEls = document.querySelectorAll('.lane');
                 
-                // Clear state
                 Object.values(tasks).forEach(t => {{
                     const el = document.getElementById(t.id);
                     if(el) el.classList.remove('warning-overlap', 'warning-precedence', 'warning-skill');
@@ -305,7 +327,6 @@ def drag_and_drop_scheduler(logic_data):
                     const worker = workers[lane.dataset.workerId];
                     const laneTasks = Array.from(lane.children).map(el => tasks[el.id]);
                     
-                    // Sort by start time for overlap check
                     laneTasks.sort((a,b) => a.start_time - b.start_time);
 
                     for (let i = 0; i < laneTasks.length; i++) {{
@@ -313,13 +334,11 @@ def drag_and_drop_scheduler(logic_data):
                         const el = document.getElementById(t.id);
                         const tooltip = document.getElementById('tooltip-' + t.id);
 
-                        // 1. Skill Check
                         if (!t.skills.some(s => worker.skills.includes(s))) {{
                             el.classList.add('warning-skill');
                             tooltip.innerText = 'Skill Mismatch';
                         }}
 
-                        // 2. Overlap Check
                         if (i > 0) {{
                             const prev = laneTasks[i-1];
                             if (t.start_time < prev.end_time) {{
@@ -329,7 +348,6 @@ def drag_and_drop_scheduler(logic_data):
                             }}
                         }}
 
-                        // 3. Precedence Check
                         t.predecessors.forEach(pId => {{
                             const pred = tasks[pId];
                             if (!pred.worker) {{
@@ -343,29 +361,10 @@ def drag_and_drop_scheduler(logic_data):
                     }}
                 }});
             }}
+            
+            // Re-run logic immediately to clear any stale state
+            checkLogic();
         </script>
     </div>
     """
     components.html(html_code, height=600, scrolling=True)
-
-# --- Updated app.py ---
-def main():
-    st.set_page_config(page_title="Project Scheduler Pro", page_icon="📅", layout="wide")
-    
-    if 'logic' not in st.session_state:
-        st.session_state.logic = SchedulingLogic()
-    logic = st.session_state.logic
-
-    st.title("🚀 Project Scheduler Pro")
-    st.markdown("### Interactive Drag-and-Drop Board")
-    st.info("Assign tasks to workers and watch for visual warnings (Red: Skill, Orange: Precedence, Red Border: Overlap)")
-
-    # Render the custom component
-    drag_and_drop_scheduler(logic)
-
-    # Rest of the dashboard...
-    st.divider()
-    # (Existing Stats and Gantt here)
-
-if __name__ == "__main__":
-    main()

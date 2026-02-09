@@ -126,11 +126,16 @@ for i, (p_name, stats) in enumerate(proj_stats.items()):
 st.divider()
 
 # --- Interactive Scheduling Board ---
-st.subheader("🎮 Interactive Scheduling Board")
-st.markdown("Drag and drop tasks between the pool and team members. Check the tooltips for logic warnings!")
+st.subheader("🎮 Visual Planning Board")
+st.info("💡 **Planning Phase**: Use this board to visually draft your schedule. Watch for color-coded warnings!")
+st.markdown("""
+<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; font-size: 0.9em; margin-bottom: 20px;">
+    <strong>Tip:</strong> Drag tasks to specific hours. Once you are happy with the plan, confirm assignments in the 
+    <em>Manual Assignment Panel</em> below to update the official Gantt chart and statistics.
+</div>
+""", unsafe_allow_html=True)
 
-# This component is visual-only in this turn as bidirectional communication 
-# is limited in pure HTML components, but it provides the requested interaction.
+# Render the custom component
 drag_and_drop_scheduler(logic)
 
 st.divider()
