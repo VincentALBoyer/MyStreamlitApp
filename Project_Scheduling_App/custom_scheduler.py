@@ -152,7 +152,10 @@ def drag_and_drop_scheduler(logic_data):
         <h4 style="margin-top:0; color:#94a3b8;">📋 Task Pool</h4>
         <div id="pool" class="pool-container"></div>
 
-        <h4 style="color:#94a3b8;">📅 Timeline (Drag tasks to specific hours)</h4>
+        <h4 style="color:#94a3b8; display: flex; justify-content: space-between; align-items: center;">
+            <span>📅 Timeline (Drag tasks to specific hours)</span>
+            <span id="makespan-display" style="color: #00ffcc; font-size: 1.2em;">Makespan: 0h</span>
+        </h4>
         <div class="timeline-container">
             <div id="ruler" class="ruler"></div>
             <div id="lanes" class="worker-lanes"></div>
@@ -161,7 +164,7 @@ def drag_and_drop_scheduler(logic_data):
         <div style="margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 0.75em; display: flex; gap: 20px;">
             <span><strong style="color: #ef4444;">Red Background:</strong> Overlap Warning</span>
             <span><strong style="color: #f59e0b;">Dashed Border:</strong> Precedence Error</span>
-            <span><strong style="color: #60a5fa;">Blue Text:</strong> Optimal</span>
+            <span><strong style="color: #ec4899;">Pink Background:</strong> Skill Mismatch</span>
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
@@ -360,6 +363,18 @@ def drag_and_drop_scheduler(logic_data):
                         }});
                     }}
                 }});
+                
+                updateMakespan();
+            }}
+            
+            function updateMakespan() {{
+                let maxEndTime = 0;
+                Object.values(tasks).forEach(t => {{
+                    if (t.end_time && t.end_time > maxEndTime) {{
+                        maxEndTime = t.end_time;
+                    }}
+                }});
+                document.getElementById('makespan-display').innerText = `Makespan: ${{maxEndTime}}h`;
             }}
             
             // Re-run logic immediately to clear any stale state
