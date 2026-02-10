@@ -36,15 +36,22 @@ class SchedulingLogic:
             "W4": Worker("W4", "Diana", ["Testing", "Documentation"]),
         }
 
-        # Project A: Web App
-        # Project B: Data Pipeline
+        # 3 Independent Projects
         self.tasks = {
-            "T1": Task("T1", "UI Design", "Project Alpha", 4, ["Design"]),
-            "T2": Task("T2", "API Development", "Project Alpha", 6, ["Backend"], ["T1"]),
-            "T3": Task("T3", "Frontend Integration", "Project Alpha", 5, ["Frontend"], ["T2"]),
-            "T4": Task("T4", "Database Schema", "Project Beta", 3, ["Database"]),
-            "T5": Task("T5", "Data Ingestion", "Project Beta", 8, ["Backend"], ["T4"]),
-            "T6": Task("T6", "Unit Testing", "Shared", 4, ["Testing"], ["T3", "T5"]),
+            # Project Alpha: Diamond Structure (T1 -> [T2, T3] -> T4)
+            "T1": Task("T1", "Project Discovery", "Project Alpha", 4, ["Design"]),
+            "T2": Task("T2", "Backend Core", "Project Alpha", 6, ["Backend"], ["T1"]),
+            "T3": Task("T3", "UI Layout", "Project Alpha", 5, ["Frontend"], ["T1"]),
+            "T4": Task("T4", "Final Review", "Project Alpha", 4, ["Testing"], ["T2", "T3"]),
+
+            # Project Beta: Sequential
+            "T5": Task("T5", "DB Architecture", "Project Beta", 3, ["Database"]),
+            "T6": Task("T6", "API Integration", "Project Beta", 8, ["Backend"], ["T5"]),
+            "T7": Task("T7", "Beta Testing", "Project Beta", 4, ["Testing"], ["T6"]),
+
+            # Project Gamma: Simple
+            "T8": Task("T8", "Asset Design", "Project Gamma", 6, ["Design"]),
+            "T9": Task("T9", "Documentation", "Project Gamma", 3, ["Documentation"], ["T8"]),
         }
 
     def assign_task(self, task_id: str, worker_id: str) -> bool:
