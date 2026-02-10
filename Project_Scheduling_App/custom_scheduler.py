@@ -367,4 +367,4 @@ def drag_and_drop_scheduler(logic_data):
         </script>
     </div>
     """
-    components.html(html_code, height=600, scrolling=True)
+    components.html(html_code, height=800, scrolling=True)

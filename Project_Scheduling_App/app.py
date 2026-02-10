@@ -78,25 +78,14 @@ logic = st.session_state.logic
 
 # --- Header ---
 st.title("🚀 Project Scheduler Pro")
-st.markdown("Optimize your team's workflow and minimize the project makespan.")
+
 
 # --- Sidebar Stats ---
 with st.sidebar:
     st.header("📊 Dashboard")
-    makespan = logic.get_makespan()
-    st.markdown(f"<div class='makespan-stat'>{makespan}h</div>", unsafe_allow_html=True)
-    st.caption("Current Total Duration")
-    
-    st.divider()
     
     unassigned = logic.get_unassigned_tasks()
     st.metric("Pending Tasks", f"{len(unassigned)}")
-    
-    st.divider()
-    
-    if st.button("🔄 Reset Project"):
-        logic.reset_game()
-        st.rerun()
     
     st.divider()
     
@@ -113,17 +102,6 @@ with st.sidebar:
     for w_id, w in logic.workers.items():
         st.write(f"**{w.name}**: {', '.join(w.skills)}")
 
-# --- Stats Bar ---
-proj_stats = logic.get_project_stats()
-stat_cols = st.columns(len(proj_stats))
-for i, (p_name, stats) in enumerate(proj_stats.items()):
-    with stat_cols[i]:
-        progress = stats["done"] / stats["total"]
-        st.write(f"**{p_name}**")
-        st.progress(progress)
-        st.caption(f"{stats['done']}/{stats['total']} Tasks Assigned")
-
-st.divider()
 
 # --- Interactive Scheduling Board ---
 st.subheader("🎮 Visual Planning Board")
