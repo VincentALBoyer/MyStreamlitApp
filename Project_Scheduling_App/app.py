@@ -19,6 +19,18 @@ st.set_page_config(
 # --- Custom CSS ---
 st.markdown("""
 <style>
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+    }
+    .stApp > header {
+        display: none;
+    }
+    [data-testid="stVerticalBlock"] {
+        gap: 0.5rem;
+    }
     .main {
         background-color: #0f1116;
         color: #e0e0e0;
@@ -87,6 +99,13 @@ with st.sidebar:
     unassigned = logic.get_unassigned_tasks()
     st.metric("Pending Tasks", f"{len(unassigned)}")
     
+    st.divider()
+    
+    hard_mode = st.toggle("🔥 Hard Mode (Double Projects)", value=logic.hard_mode)
+    if hard_mode != logic.hard_mode:
+        logic.reset_game(hard_mode)
+        st.rerun()
+
     st.divider()
     
     with st.expander("📖 How to Play"):

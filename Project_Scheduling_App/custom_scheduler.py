@@ -9,6 +9,9 @@ from logic import SchedulingLogic
 
 # --- Custom HTML Component for Drag and Drop ---
 def drag_and_drop_scheduler(logic_data):
+    # Determine horizon based on hard_mode or content
+    horizon = 40 if logic_data.hard_mode else 24
+    
     # Prepare data for JS
     tasks_json = json.dumps({t_id: {
         "id": t_id,
@@ -31,20 +34,21 @@ def drag_and_drop_scheduler(logic_data):
     <div id="scheduler-root" style="font-family: 'Inter', sans-serif; color: #e0e0e0; background: #0f1116; padding: 20px; border-radius: 15px;">
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+            * {{ box-sizing: border-box; }}
             :root {{
                 --hour-width: 40px;
-                --total-hours: 24;
+                --total-hours: {horizon};
             }}
             .pool-container {{
                 background: rgba(255, 255, 255, 0.03);
                 border: 1px dashed rgba(255, 255, 255, 0.1);
                 border-radius: 10px;
-                min-height: 80px;
+                min-height: 40px;
                 display: flex;
                 flex-wrap: wrap;
-                gap: 10px;
-                padding: 15px;
-                margin-bottom: 20px;
+                gap: 8px;
+                padding: 8px;
+                margin-bottom: 10px;
             }}
             .timeline-container {{
                 overflow-x: auto;
@@ -62,12 +66,14 @@ def drag_and_drop_scheduler(logic_data):
                 flex-shrink: 0;
                 font-size: 10px;
                 color: #475569;
-                text-align: center;
+                text-align: left;
+                padding-left: 2px;
+                border-left: 1px solid rgba(255,255,255,0.05);
             }}
             .worker-lanes {{
                 display: flex;
                 flex-direction: column;
-                gap: 10px;
+                gap: 5px;
             }}
             .lane-row {{
                 display: flex;
@@ -76,6 +82,8 @@ def drag_and_drop_scheduler(logic_data):
             }}
             .worker-label {{
                 width: 150px;
+                min-width: 150px;
+                flex-shrink: 0;
                 padding-right: 15px;
                 font-weight: 600;
                 color: #60a5fa;
@@ -83,6 +91,9 @@ def drag_and_drop_scheduler(logic_data):
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
             }}
             .lane {{
                 flex-shrink: 0;
@@ -92,7 +103,7 @@ def drag_and_drop_scheduler(logic_data):
                 background-size: var(--hour-width) 100%;
                 background-color: rgba(255, 255, 255, 0.04);
                 border-radius: 4px;
-                min-height: 100px;
+                min-height: 68px;
                 position: relative;
                 border: 1px solid rgba(255, 255, 255, 0.05);
             }}
@@ -100,12 +111,12 @@ def drag_and_drop_scheduler(logic_data):
                 background: #1e293b;
                 border: 1px solid #334155;
                 border-radius: 6px;
-                padding: 8px;
+                padding: 4px 8px;
                 cursor: grab;
                 user-select: none;
                 position: absolute;
-                height: 80px;
-                top: 10px;
+                height: 64px;
+                top: 2px;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
@@ -115,9 +126,13 @@ def drag_and_drop_scheduler(logic_data):
             }}
             .pool-task {{
                 position: static !important;
-                height: auto;
+                height: 32px !important;
                 width: auto !important;
                 min-width: 100px;
+                padding: 4px 8px !important;
+            }}
+            .pool-task .task-info:not(:first-of-type) {{
+                display: none;
             }}
             .task-block:hover {{
                 border-color: #00ffcc;
@@ -137,10 +152,11 @@ def drag_and_drop_scheduler(logic_data):
                 transform: translateX(-50%);
                 background: #000;
                 color: #fff;
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 4px;
-                font-size: 9px;
-                white-space: nowrap;
+                font-size: 10px;
+                line-height: 1.4;
+                white-space: pre-line;
                 visibility: hidden;
                 pointer-events: none;
                 opacity: 0.9;
@@ -176,12 +192,20 @@ def drag_and_drop_scheduler(logic_data):
             const projectColors = {{
                 'Project Alpha': 'rgba(59, 130, 246, 0.2)',
                 'Project Beta': 'rgba(16, 185, 129, 0.2)',
+                'Project Gamma': 'rgba(251, 191, 36, 0.2)',
+                'Project Delta': 'rgba(236, 72, 153, 0.2)',
+                'Project Epsilon': 'rgba(139, 92, 246, 0.2)',
+                'Project Zeta': 'rgba(20, 184, 166, 0.2)',
                 'Shared': 'rgba(139, 92, 246, 0.2)',
                 'Default': 'rgba(107, 114, 128, 0.2)'
             }};
             const projectBorderColors = {{
                 'Project Alpha': '#3b82f6',
                 'Project Beta': '#10b981',
+                'Project Gamma': '#fbbf24',
+                'Project Delta': '#ec4899',
+                'Project Epsilon': '#8b5cf6',
+                'Project Zeta': '#14b8a6',
                 'Shared': '#8b5cf6',
                 'Default': '#6b7280'
             }};
@@ -195,6 +219,7 @@ def drag_and_drop_scheduler(logic_data):
                 div.className = 'task-block';
                 div.id = task.id;
                 div.dataset.duration = task.duration;
+                div.dataset.projectId = task.project;
                 div.style.width = (task.duration * HOUR_WIDTH) + 'px';
                 
                 const bgColor = projectColors[task.project] || projectColors['Default'];
@@ -208,18 +233,21 @@ def drag_and_drop_scheduler(logic_data):
                 const predNames = task.predecessors.map(pId => tasks[pId] ? tasks[pId].name : pId).join(', ');
                 const predHtml = predNames ? `<div class="task-info" style="color: #cbd5e1; font-style: italic;">Need: ${{predNames}}</div>` : '';
 
+                const infoText = `Length: ${{task.duration}}h\nSkills: ${{skillNames}}`;
+
                 div.innerHTML = `
                     <div class="task-name">${{task.name}}</div>
                     <div class="task-info">${{task.duration}}h | ${{task.project}}</div>
                     ${{skillHtml}}
                     ${{predHtml}}
-                    <div class="tooltip" id="tooltip-${{task.id}}">Ready</div>
+                    <div class="tooltip" id="tooltip-${{task.id}}">${{infoText}}</div>
                 `;
                 return div;
             }}
 
             // 1. Create Ruler
-            for(let i=0; i<=24; i++) {{
+            const HORIZON = {horizon};
+            for(let i=0; i<=HORIZON; i++) {{
                 const hour = document.createElement('div');
                 hour.className = 'ruler-hour';
                 hour.innerText = i + 'h';
@@ -227,12 +255,44 @@ def drag_and_drop_scheduler(logic_data):
             }}
 
             // 2. Create Tasks and Workers
-            Object.values(tasks).forEach(t => {{
-                const el = createTaskEl(t);
-                if (!t.worker) {{
+            const projects = [...new Set(Object.values(tasks).map(t => t.project))].sort();
+            
+            projects.forEach(projectName => {{
+                const projectTasks = Object.values(tasks).filter(t => t.project === projectName && !t.worker);
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.marginBottom = '4px';
+                row.style.width = '100%';
+                row.style.gap = '10px';
+                
+                const label = document.createElement('div');
+                label.style.fontSize = '0.65em';
+                label.style.color = projectBorderColors[projectName] || '#94a3b8';
+                label.style.fontWeight = 'bold';
+                label.style.width = '100px';
+                label.style.flexShrink = '0';
+                label.innerText = projectName.toUpperCase();
+                
+                const container = document.createElement('div');
+                container.className = 'pool-container project-pool';
+                container.dataset.projectId = projectName;
+                container.style.marginBottom = '0';
+                container.style.minHeight = '30px';
+                container.style.flexGrow = '1';
+                container.style.border = '1px solid rgba(255,255,255,0.05)';
+                container.style.padding = '4px';
+                
+                projectTasks.forEach(t => {{
+                    const el = createTaskEl(t);
                     el.classList.add('pool-task');
-                    poolEl.appendChild(el);
-                }}
+                    container.appendChild(el);
+                }});
+                
+                row.appendChild(label);
+                row.appendChild(container);
+                poolEl.appendChild(row);
+                poolEl.style.flexDirection = 'column';
             }});
 
             Object.values(workers).forEach(w => {{
@@ -284,11 +344,15 @@ def drag_and_drop_scheduler(logic_data):
                     const taskEl = event.relatedTarget;
                     const laneEl = event.target;
                     
-                    const rect = laneEl.getBoundingClientRect();
-                    const dropX = event.dragEvent.client.x - rect.left;
+                    const laneRect = laneEl.getBoundingClientRect();
+                    const taskRect = taskEl.getBoundingClientRect();
+                    
+                    // Use the task's left edge relative to the lane's left edge
+                    const dropX = taskRect.left - laneRect.left;
                     let startHour = Math.round(dropX / HOUR_WIDTH);
                     
-                    startHour = Math.max(0, Math.min(startHour, 24 - parseInt(taskEl.dataset.duration)));
+                    // Strictly enforce 0 as the minimum start time
+                    startHour = Math.max(0, Math.min(startHour, HORIZON - parseInt(taskEl.dataset.duration)));
                     
                     taskEl.classList.remove('pool-task');
                     taskEl.style.left = (startHour * HOUR_WIDTH) + 'px';
@@ -302,16 +366,23 @@ def drag_and_drop_scheduler(logic_data):
                 }}
             }});
 
-            interact('.pool-container').dropzone({{
+            interact('.project-pool').dropzone({{
                 accept: '.task-block',
                 ondrop(event) {{
                     const taskEl = event.relatedTarget;
+                    const poolEl = event.target;
+                    
+                    // Optional: Ensure task goes to its own project pool
+                    // const projectPool = document.querySelector(`.project-pool[data-project-id="${{tasks[taskEl.id].project}}"]`);
+                    // (projectPool || poolEl).appendChild(taskEl);
+                    
                     taskEl.classList.add('pool-task');
                     taskEl.style.left = 'auto';
-                    event.target.appendChild(taskEl);
+                    poolEl.appendChild(taskEl);
                     
                     tasks[taskEl.id].worker = null;
                     tasks[taskEl.id].start_time = null;
+                    tasks[taskEl.id].end_time = null;
                     checkLogic();
                 }}
             }});
@@ -323,7 +394,10 @@ def drag_and_drop_scheduler(logic_data):
                     const el = document.getElementById(t.id);
                     if(el) el.classList.remove('warning-overlap', 'warning-precedence', 'warning-skill');
                     const tooltip = document.getElementById('tooltip-' + t.id);
-                    if(tooltip) tooltip.innerText = 'OK';
+                    if(tooltip) {{
+                        const skillNames = t.skills.join(', ');
+                        tooltip.innerText = `OK\nLength: ${{t.duration}}h\nSkills: ${{skillNames}}`;
+                    }}
                 }});
 
                 laneEls.forEach(lane => {{
@@ -339,7 +413,7 @@ def drag_and_drop_scheduler(logic_data):
 
                         if (!t.skills.some(s => worker.skills.includes(s))) {{
                             el.classList.add('warning-skill');
-                            tooltip.innerText = 'Skill Mismatch';
+                            tooltip.innerText = `Skill Mismatch\nLength: ${{t.duration}}h\nSkills: ${{t.skills.join(', ')}}`;
                         }}
 
                         if (i > 0) {{
@@ -347,7 +421,7 @@ def drag_and_drop_scheduler(logic_data):
                             if (t.start_time < prev.end_time) {{
                                 el.classList.add('warning-overlap');
                                 document.getElementById(prev.id).classList.add('warning-overlap');
-                                tooltip.innerText = 'Time Overlap!';
+                                tooltip.innerText = `Time Overlap!\nLength: ${{t.duration}}h\nSkills: ${{t.skills.join(', ')}}`;
                             }}
                         }}
 
@@ -355,10 +429,10 @@ def drag_and_drop_scheduler(logic_data):
                             const pred = tasks[pId];
                             if (!pred.worker) {{
                                 el.classList.add('warning-precedence');
-                                tooltip.innerText = 'Pred. not assigned';
+                                tooltip.innerText = `Pred. not assigned\nLength: ${{t.duration}}h\nSkills: ${{t.skills.join(', ')}}`;
                             }} else if (pred.end_time > t.start_time) {{
                                 el.classList.add('warning-precedence');
-                                tooltip.innerText = 'Starts before Pred. ends';
+                                tooltip.innerText = `Starts before Pred.\nLength: ${{t.duration}}h\nSkills: ${{t.skills.join(', ')}}`;
                             }}
                         }});
                     }}
