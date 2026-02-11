@@ -86,19 +86,16 @@ class SchedulingLogic:
 
 def create_scheduler_html(logic_data):
     """
-    Generate the interactive drag-and-drop scheduler HTML.
-    
-    Args:
-        logic_data: SchedulingLogic instance with tasks and workers
-        
-    Returns:
-        HTML string for the interactive scheduler
+    Generate the interactive drag-and-drop scheduler HTML with unique scoping for Jupyter notebooks.
     """
+    import time
+    instance_id = int(time.time() * 1000)
+    
     # Determine horizon based on hard_mode
     horizon = 40 if logic_data.hard_mode else 24
     
     # Prepare data for JavaScript
-    tasks_json = json.dumps({t_id: {
+    tasks_dict = {t_id: {
         "id": t_id,
         "name": t.name,
         "duration": t.duration,
@@ -107,20 +104,23 @@ def create_scheduler_html(logic_data):
         "project": t.project,
         "worker": t.assigned_worker,
         "start_time": t.start_time
-    } for t_id, t in logic_data.tasks.items()})
+    } for t_id, t in logic_data.tasks.items()}
     
-    workers_json = json.dumps({w_id: {
+    workers_dict = {w_id: {
         "id": w_id,
         "name": w.name,
         "skills": w.skills
-    } for w_id, w in logic_data.workers.items()})
+    } for w_id, w in logic_data.workers.items()}
+
+    tasks_json = json.dumps(tasks_dict)
+    workers_json = json.dumps(workers_dict)
 
     html_code = f"""
-    <div id="scheduler-root" style="font-family: 'Inter', sans-serif; color: #e0e0e0; background: #0f1116; padding: 20px; border-radius: 15px;">
+    <div id="scheduler-root-{instance_id}" class="scheduler-instance" style="font-family: 'Inter', sans-serif; color: #e0e0e0; background: #0f1116; padding: 20px; border-radius: 15px;">
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-            * {{ box-sizing: border-box; }}
-            :root {{
+            #scheduler-root-{instance_id} * {{ box-sizing: border-box; }}
+            #scheduler-root-{instance_id} {{
                 --hour-width: 40px;
                 --total-hours: {horizon};
             }}
@@ -216,7 +216,7 @@ def create_scheduler_html(logic_data):
                 min-width: 100px;
                 padding: 4px 8px !important;
             }}
-            .pool-task .task-info:not(:first-of-type) {{
+            .pool-task .task-info {{
                 display: none;
             }}
             .task-block:hover {{
@@ -251,15 +251,15 @@ def create_scheduler_html(logic_data):
         </style>
 
         <h4 style="margin-top:0; color:#94a3b8;">📋 Task Pool</h4>
-        <div id="pool" class="pool-container"></div>
+        <div id="pool-{instance_id}" class="pool-container"></div>
 
         <h4 style="color:#94a3b8; display: flex; justify-content: space-between; align-items: center;">
             <span>📅 Timeline (Drag tasks to specific hours)</span>
-            <span id="makespan-display" style="color: #00ffcc; font-size: 1.2em;">Makespan: 0h</span>
+            <span id="makespan-display-{instance_id}" style="color: #00ffcc; font-size: 1.2em;">Makespan: 0h</span>
         </h4>
         <div class="timeline-container">
-            <div id="ruler" class="ruler"></div>
-            <div id="lanes" class="worker-lanes"></div>
+            <div id="ruler-{instance_id}" class="ruler"></div>
+            <div id="lanes-{instance_id}" class="worker-lanes"></div>
         </div>
 
         <div style="margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 0.75em; display: flex; gap: 20px;">
@@ -270,8 +270,10 @@ def create_scheduler_html(logic_data):
 
         <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
         <script>
+        (function() {{
             const tasks = {tasks_json};
             const workers = {workers_json};
+            const instanceId = "{instance_id}";
             const HOUR_WIDTH = 40;
             const HORIZON = {horizon};
             
@@ -294,14 +296,15 @@ def create_scheduler_html(logic_data):
                 'Default': '#6b7280'
             }};
 
-            const poolEl = document.getElementById('pool');
-            const lanesEl = document.getElementById('lanes');
-            const rulerEl = document.getElementById('ruler');
+            const poolEl = document.getElementById('pool-' + instanceId);
+            const lanesEl = document.getElementById('lanes-' + instanceId);
+            const rulerEl = document.getElementById('ruler-' + instanceId);
 
             function createTaskEl(task) {{
                 const div = document.createElement('div');
                 div.className = 'task-block';
-                div.id = task.id;
+                div.id = 'task-' + instanceId + '-' + task.id;
+                div.dataset.taskId = task.id;
                 div.dataset.duration = task.duration;
                 div.style.width = (task.duration * HOUR_WIDTH) + 'px';
                 
@@ -322,7 +325,7 @@ def create_scheduler_html(logic_data):
                     <div class="task-info">${{task.duration}}h | ${{task.project}}</div>
                     ${{skillHtml}}
                     ${{predHtml}}
-                    <div class="tooltip" id="tooltip-${{task.id}}">${{infoText}}</div>
+                    <div class="tooltip" id="tooltip-${{instanceId}}-${{task.id}}">${{infoText}}</div>
                 `;
                 return div;
             }}
@@ -356,7 +359,7 @@ def create_scheduler_html(logic_data):
                 label.innerText = projectName.toUpperCase();
                 
                 const container = document.createElement('div');
-                container.className = 'pool-container project-pool';
+                container.className = 'pool-container project-pool-' + instanceId;
                 container.dataset.projectId = projectName;
                 container.style.marginBottom = '0';
                 container.style.minHeight = '30px';
@@ -382,8 +385,8 @@ def create_scheduler_html(logic_data):
                 row.innerHTML = `<div class="worker-label">${{w.name}}<br><small style="color:#475569; font-weight:normal;">${{w.skills.slice(0,2).join(', ')}}</small></div>`;
                 
                 const lane = document.createElement('div');
-                lane.className = 'lane';
-                lane.id = `lane-${{w.id}}`;
+                lane.className = 'lane lane-' + instanceId;
+                lane.id = `lane-${{instanceId}}-${{w.id}}`;
                 lane.dataset.workerId = w.id;
                 
                 row.appendChild(lane);
@@ -397,7 +400,11 @@ def create_scheduler_html(logic_data):
             }});
 
             // 3. Interaction
-            interact('.task-block').draggable({{
+            const taskSelector = '#scheduler-root-' + instanceId + ' .task-block';
+            const laneSelector = '.lane-' + instanceId;
+            const poolSelector = '.project-pool-' + instanceId;
+
+            interact(taskSelector).draggable({{
                 listeners: {{
                     move(event) {{
                         const target = event.target;
@@ -416,8 +423,8 @@ def create_scheduler_html(logic_data):
                 }}
             }});
 
-            interact('.lane').dropzone({{
-                accept: '.task-block',
+            interact(laneSelector).dropzone({{
+                accept: taskSelector,
                 overlap: 0.1,
                 ondrop(event) {{
                     const taskEl = event.relatedTarget;
@@ -428,37 +435,39 @@ def create_scheduler_html(logic_data):
                     let startHour = Math.round(dropX / HOUR_WIDTH);
                     startHour = Math.max(0, Math.min(startHour, HORIZON - parseInt(taskEl.dataset.duration)));
                     
+                    const taskId = taskEl.dataset.taskId;
                     taskEl.classList.remove('pool-task');
                     taskEl.style.left = (startHour * HOUR_WIDTH) + 'px';
                     laneEl.appendChild(taskEl);
                     
-                    tasks[taskEl.id].worker = laneEl.dataset.workerId;
-                    tasks[taskEl.id].start_time = startHour;
-                    tasks[taskEl.id].end_time = startHour + tasks[taskEl.id].duration;
+                    tasks[taskId].worker = laneEl.dataset.workerId;
+                    tasks[taskId].start_time = startHour;
+                    tasks[taskId].end_time = startHour + tasks[taskId].duration;
                     checkLogic();
                 }}
             }});
 
-            interact('.project-pool').dropzone({{
-                accept: '.task-block',
+            interact(poolSelector).dropzone({{
+                accept: taskSelector,
                 ondrop(event) {{
                     const taskEl = event.relatedTarget;
+                    const taskId = taskEl.dataset.taskId;
                     taskEl.classList.add('pool-task');
                     taskEl.style.left = 'auto';
                     event.target.appendChild(taskEl);
-                    tasks[taskEl.id].worker = null;
-                    tasks[taskEl.id].start_time = null;
-                    tasks[taskEl.id].end_time = null;
+                    tasks[taskId].worker = null;
+                    tasks[taskId].start_time = null;
+                    tasks[taskId].end_time = null;
                     checkLogic();
                 }}
             }});
 
             function checkLogic() {{
-                const laneEls = document.querySelectorAll('.lane');
+                const laneEls = document.querySelectorAll('#scheduler-root-' + instanceId + ' .lane');
                 Object.values(tasks).forEach(t => {{
-                    const el = document.getElementById(t.id);
+                    const el = document.getElementById('task-' + instanceId + '-' + t.id);
                     if(el) el.classList.remove('warning-overlap', 'warning-precedence', 'warning-skill');
-                    const tooltip = document.getElementById('tooltip-' + t.id);
+                    const tooltip = document.getElementById('tooltip-' + instanceId + '-' + t.id);
                     if(tooltip) {{
                         const skillNames = t.skills.join(', ');
                         tooltip.innerText = `OK\\nLength: ${{t.duration}}h\\nSkills: ${{skillNames}}`;
@@ -467,13 +476,13 @@ def create_scheduler_html(logic_data):
 
                 laneEls.forEach(lane => {{
                     const worker = workers[lane.dataset.workerId];
-                    const laneTasks = Array.from(lane.children).map(el => tasks[el.id]);
+                    const laneTasks = Array.from(lane.children).filter(el => el.dataset && el.dataset.taskId).map(el => tasks[el.dataset.taskId]);
                     laneTasks.sort((a,b) => a.start_time - b.start_time);
 
                     for (let i = 0; i < laneTasks.length; i++) {{
                         const t = laneTasks[i];
-                        const el = document.getElementById(t.id);
-                        const tooltip = document.getElementById('tooltip-' + t.id);
+                        const el = document.getElementById('task-' + instanceId + '-' + t.id);
+                        const tooltip = document.getElementById('tooltip-' + instanceId + '-' + t.id);
 
                         if (!t.skills.some(s => worker.skills.includes(s))) {{
                             el.classList.add('warning-skill');
@@ -484,7 +493,7 @@ def create_scheduler_html(logic_data):
                             const prev = laneTasks[i-1];
                             if (t.start_time < prev.end_time) {{
                                 el.classList.add('warning-overlap');
-                                document.getElementById(prev.id).classList.add('warning-overlap');
+                                document.getElementById('task-' + instanceId + '-' + prev.id).classList.add('warning-overlap');
                                 tooltip.innerText = `Time Overlap!\\nLength: ${{t.duration}}h\\nSkills: ${{t.skills.join(', ')}}`;
                             }}
                         }}
@@ -509,10 +518,11 @@ def create_scheduler_html(logic_data):
                 Object.values(tasks).forEach(t => {{
                     if (t.end_time && t.end_time > maxEndTime) maxEndTime = t.end_time;
                 }});
-                document.getElementById('makespan-display').innerText = `Makespan: ${{maxEndTime}}h`;
+                document.getElementById('makespan-display-' + instanceId).innerText = `Makespan: ${{maxEndTime}}h`;
             }}
             
             checkLogic();
+        }})();
         </script>
     </div>
     """
