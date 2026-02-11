@@ -22,12 +22,16 @@ class Worker:
     skills: List[str]
 
 class SchedulingLogic:
-    def __init__(self):
+    def __init__(self, hard_mode=False):
         self.tasks: Dict[str, Task] = {}
         self.workers: Dict[str, Worker] = {}
-        self.reset_game()
+        self.hard_mode = hard_mode
+        self.reset_game(hard_mode)
 
-    def reset_game(self):
+    def reset_game(self, hard_mode=None):
+        if hard_mode is not None:
+            self.hard_mode = hard_mode
+        
         # Sample Data
         self.workers = {
             "W1": Worker("W1", "Alice", ["Frontend", "Design"]),
@@ -36,7 +40,7 @@ class SchedulingLogic:
             "W4": Worker("W4", "Diana", ["Testing", "Documentation"]),
         }
 
-        # 3 Independent Projects
+        # Base Projects
         self.tasks = {
             # Project Alpha: Diamond Structure (T1 -> [T2, T3] -> T4)
             "T1": Task("T1", "Project Discovery", "Project Alpha", 4, ["Design"]),
@@ -53,6 +57,27 @@ class SchedulingLogic:
             "T8": Task("T8", "Asset Design", "Project Gamma", 6, ["Design"]),
             "T9": Task("T9", "Documentation", "Project Gamma", 3, ["Documentation"], ["T8"]),
         }
+
+        if self.hard_mode:
+            # Add 3 more projects for "Hard Mode"
+            hard_tasks = {
+                # Project Delta: Parallel tasks
+                "T10": Task("T10", "Market Research", "Project Delta", 5, ["Design"]),
+                "T11": Task("T11", "Security Audit", "Project Delta", 6, ["Backend"]),
+                "T12": Task("T12", "Legal Review", "Project Delta", 4, ["Documentation"]),
+
+                # Project Epsilon: Long chain
+                "T13": Task("T13", "Schema Design", "Project Epsilon", 4, ["Database"]),
+                "T14": Task("T14", "CRUD API", "Project Epsilon", 5, ["Backend"], ["T13"]),
+                "T15": Task("T15", "Admin UI", "Project Epsilon", 6, ["Frontend"], ["T14"]),
+                "T16": Task("T16", "Deployment", "Project Epsilon", 3, ["Testing"], ["T15"]),
+
+                # Project Zeta: Heavy Frontend
+                "T17": Task("T17", "Wireframes", "Project Zeta", 4, ["Design"]),
+                "T18": Task("T18", "Vue/React Setup", "Project Zeta", 5, ["Frontend"], ["T17"]),
+                "T19": Task("T19", "Mobile Responsive", "Project Zeta", 6, ["Frontend"], ["T18"]),
+            }
+            self.tasks.update(hard_tasks)
 
     def assign_task(self, task_id: str, worker_id: str) -> bool:
         if task_id not in self.tasks or worker_id not in self.workers:

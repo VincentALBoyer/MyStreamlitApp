@@ -89,6 +89,13 @@ with st.sidebar:
     
     st.divider()
     
+    hard_mode = st.toggle("🔥 Hard Mode (Double Projects)", value=logic.hard_mode)
+    if hard_mode != logic.hard_mode:
+        logic.reset_game(hard_mode)
+        st.rerun()
+
+    st.divider()
+    
     with st.expander("📖 How to Play"):
         st.write("""
         1. **Goal**: Finish all projects in the minimum time.

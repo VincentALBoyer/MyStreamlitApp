@@ -176,12 +176,20 @@ def drag_and_drop_scheduler(logic_data):
             const projectColors = {{
                 'Project Alpha': 'rgba(59, 130, 246, 0.2)',
                 'Project Beta': 'rgba(16, 185, 129, 0.2)',
+                'Project Gamma': 'rgba(251, 191, 36, 0.2)',
+                'Project Delta': 'rgba(236, 72, 153, 0.2)',
+                'Project Epsilon': 'rgba(139, 92, 246, 0.2)',
+                'Project Zeta': 'rgba(20, 184, 166, 0.2)',
                 'Shared': 'rgba(139, 92, 246, 0.2)',
                 'Default': 'rgba(107, 114, 128, 0.2)'
             }};
             const projectBorderColors = {{
                 'Project Alpha': '#3b82f6',
                 'Project Beta': '#10b981',
+                'Project Gamma': '#fbbf24',
+                'Project Delta': '#ec4899',
+                'Project Epsilon': '#8b5cf6',
+                'Project Zeta': '#14b8a6',
                 'Shared': '#8b5cf6',
                 'Default': '#6b7280'
             }};
@@ -195,6 +203,7 @@ def drag_and_drop_scheduler(logic_data):
                 div.className = 'task-block';
                 div.id = task.id;
                 div.dataset.duration = task.duration;
+                div.dataset.projectId = task.project;
                 div.style.width = (task.duration * HOUR_WIDTH) + 'px';
                 
                 const bgColor = projectColors[task.project] || projectColors['Default'];
@@ -227,12 +236,41 @@ def drag_and_drop_scheduler(logic_data):
             }}
 
             // 2. Create Tasks and Workers
-            Object.values(tasks).forEach(t => {{
-                const el = createTaskEl(t);
-                if (!t.worker) {{
+            const projects = [...new Set(Object.values(tasks).map(t => t.project))].sort();
+            
+            projects.forEach(projectName => {{
+                const projectTasks = Object.values(tasks).filter(t => t.project === projectName && !t.worker);
+                // Create row for project regardless of whether it has tasks, so there's always a dropzone
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.flexDirection = 'column';
+                row.style.marginBottom = '10px';
+                row.style.width = '100%';
+                
+                const label = document.createElement('div');
+                label.style.fontSize = '0.7em';
+                label.style.color = projectBorderColors[projectName] || '#94a3b8';
+                label.style.marginBottom = '5px';
+                label.style.fontWeight = 'bold';
+                label.innerText = projectName.toUpperCase();
+                
+                const container = document.createElement('div');
+                container.className = 'pool-container project-pool';
+                container.dataset.projectId = projectName;
+                container.style.marginBottom = '0';
+                container.style.minHeight = '60px';
+                container.style.border = '1px solid rgba(255,255,255,0.05)';
+                
+                projectTasks.forEach(t => {{
+                    const el = createTaskEl(t);
                     el.classList.add('pool-task');
-                    poolEl.appendChild(el);
-                }}
+                    container.appendChild(el);
+                }});
+                
+                row.appendChild(label);
+                row.appendChild(container);
+                poolEl.appendChild(row);
+                poolEl.style.flexDirection = 'column';
             }});
 
             Object.values(workers).forEach(w => {{
@@ -302,16 +340,23 @@ def drag_and_drop_scheduler(logic_data):
                 }}
             }});
 
-            interact('.pool-container').dropzone({{
+            interact('.project-pool').dropzone({{
                 accept: '.task-block',
                 ondrop(event) {{
                     const taskEl = event.relatedTarget;
+                    const poolEl = event.target;
+                    
+                    // Optional: Ensure task goes to its own project pool
+                    // const projectPool = document.querySelector(`.project-pool[data-project-id="${{tasks[taskEl.id].project}}"]`);
+                    // (projectPool || poolEl).appendChild(taskEl);
+                    
                     taskEl.classList.add('pool-task');
                     taskEl.style.left = 'auto';
-                    event.target.appendChild(taskEl);
+                    poolEl.appendChild(taskEl);
                     
                     tasks[taskEl.id].worker = null;
                     tasks[taskEl.id].start_time = null;
+                    tasks[taskEl.id].end_time = null;
                     checkLogic();
                 }}
             }});
