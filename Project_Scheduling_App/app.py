@@ -19,6 +19,18 @@ st.set_page_config(
 # --- Custom CSS ---
 st.markdown("""
 <style>
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+    }
+    .stApp > header {
+        display: none;
+    }
+    [data-testid="stVerticalBlock"] {
+        gap: 0.5rem;
+    }
     .main {
         background-color: #0f1116;
         color: #e0e0e0;

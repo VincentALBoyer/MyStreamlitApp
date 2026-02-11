@@ -68,14 +68,14 @@ class SchedulingLogic:
 
                 # Project Epsilon: Long chain
                 "T13": Task("T13", "Schema Design", "Project Epsilon", 4, ["Database"]),
-                "T14": Task("T14", "CRUD API", "Project Epsilon", 5, ["Backend"], ["T13"]),
+                "T14": Task("T14", "CRUD API", "Project Epsilon", 5, ["Backend"]),
                 "T15": Task("T15", "Admin UI", "Project Epsilon", 6, ["Frontend"], ["T14"]),
                 "T16": Task("T16", "Deployment", "Project Epsilon", 3, ["Testing"], ["T15"]),
 
                 # Project Zeta: Heavy Frontend
                 "T17": Task("T17", "Wireframes", "Project Zeta", 4, ["Design"]),
                 "T18": Task("T18", "Vue/React Setup", "Project Zeta", 5, ["Frontend"], ["T17"]),
-                "T19": Task("T19", "Mobile Responsive", "Project Zeta", 6, ["Frontend"], ["T18"]),
+                "T19": Task("T19", "Mobile Responsive", "Project Zeta", 6, ["Frontend"]),
             }
             self.tasks.update(hard_tasks)
 
@@ -86,7 +86,7 @@ class SchedulingLogic:
         task = self.tasks[task_id]
         worker = self.workers[worker_id]
         
-        # Check if worker has required skills
+        # Check if worker has required skill
         if not any(skill in worker.skills for skill in task.skills_required):
             return False
             
