@@ -30,7 +30,7 @@ class Lead:
     days_in_stage: int = 0
     assigned_rep: Optional[str] = None
     
-    def get_effective_probability(self, reps: Dict[str, SalesRep]) -> int:
+    def get_effective_probability(self, reps: Dict[str, SalesRep], workload: int = 0) -> int:
         if not self.assigned_rep or self.assigned_rep not in reps:
             return self.base_win_probability
         
@@ -46,6 +46,15 @@ class Lead:
             prob += 5
         elif rep.streak <= -3:
             prob -= 5
+            
+        # Rep Overload Penalty (New)
+        # Thresholds: 1-2 leads: 0, 3 leads: -5%, 4 leads: -15%, 5+ leads: -30%
+        if workload == 3:
+            prob -= 5
+        elif workload == 4:
+            prob -= 15
+        elif workload >= 5:
+            prob -= 30
         
         return min(100, max(0, prob))
 
@@ -231,7 +240,9 @@ def progress_lead(state: GameState, lead: Lead) -> List[str]:
     
     if lead.stage == "Negotiation":
         # Attempt to close
-        eff_prob = lead.get_effective_probability(state.reps)
+        workloads = get_rep_workloads(state.leads)
+        workload = workloads.get(lead.assigned_rep, 0)
+        eff_prob = lead.get_effective_probability(state.reps, workload)
         roll = random.randint(0, 100)
         
         if roll <= eff_prob:
@@ -337,11 +348,20 @@ def generate_marketing_leads(state: GameState, campaign_type: str) -> List[Lead]
     
     return leads
 
+def get_rep_workloads(leads: List[Lead]) -> Dict[str, int]:
+    """Calculate current workload for each rep"""
+    workloads = {}
+    for lead in leads:
+        if lead.assigned_rep and lead.stage not in ["Closed Won", "Closed Lost"]:
+            workloads[lead.assigned_rep] = workloads.get(lead.assigned_rep, 0) + 1
+    return workloads
+
 def process_daily_batch(state: GameState):
     """Main daily turn processing"""
     state.daily_events = []
     
     # 1. Progress assigned leads
+    workloads = get_rep_workloads(state.leads)
     for lead in state.leads:
         if lead.assigned_rep and lead.stage not in ["Closed Won", "Closed Lost"]:
             events = progress_lead(state, lead)

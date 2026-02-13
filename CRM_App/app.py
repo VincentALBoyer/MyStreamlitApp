@@ -15,136 +15,48 @@ st.set_page_config(
 # Theme-Agnostic High-Contrast Styling
 st.markdown("""
 <style>
-    /* === FORCE LIGHT THEME GLOBALLY === */
-    .stApp, [data-testid="stAppViewContainer"], .main {
-        background-color: #f8f9fa !important;
-        color: #1a1a1a !important;
+    /* === TOTAL REFINEMENT === */
+    .stApp {
+        background-color: #f7f9fc !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
     
-    /* Force all text elements to dark */
-    p, span, div, label, li, h1, h2, h3, h4, h5, h6 {
-        color: #1a1a1a !important;
-    }
-    
-    /* Header - Deep Navy with White Text */
+    /* Header - Modern Salesforce-like Blue */
     .crm-header { 
-        background-color: #1c2d3d !important; 
+        background: linear-gradient(135deg, #1589ee 0%, #0070d2 100%) !important; 
+        padding: 1.5rem 2.5rem; 
+        border-radius: 12px;
+        box-shadow: 0 8px 16px rgba(0,112,210,0.15);
+        margin-bottom: 2.5rem;
+    }
+    .crm-header h2 { 
         color: #ffffff !important; 
-        padding: 1.5rem; 
-        border-bottom: 5px solid #0070f2;
-        margin-bottom: 25px;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin: 0 !important; 
+        font-weight: 700 !important;
+        font-size: 1.8rem !important;
     }
-    .crm-header h2 { color: #ffffff !important; margin: 0; }
     
-    /* Metrics - Force Dark Text */
+    /* Metrics - Balanced Width */
+    [data-testid="stMetric"] {
+        background-color: #ffffff !important;
+        padding: 0.8rem !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+        border: 1px solid #e0e6ed !important;
+        min-width: 150px !important;
+    }
     [data-testid="stMetricValue"] { 
-        color: #1c2d3d !important; 
-        font-weight: 800; 
-        font-size: 1.8rem; 
-    }
-    [data-testid="stMetricLabel"] { 
-        color: #555555 !important; 
-        font-size: 0.9rem; 
+        color: #1a1a1a !important; 
+        font-weight: 800 !important; 
+        font-size: 1.5rem !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
     }
     
-    /* Containers & Cards - White Background */
-    [data-testid="stVerticalBlock"] > div {
-        background-color: #ffffff !important;
-    }
-    .element-container, [data-testid="stMarkdownContainer"] {
-        color: #1a1a1a !important;
-    }
-    
-    /* Tables - White Background, Dark Text */
-    .stDataFrame, [data-testid="stTable"], table {
-        background-color: #ffffff !important;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-    }
-    .stDataFrame table, .stDataFrame th, .stDataFrame td,
-    [data-testid="stTable"] table, [data-testid="stTable"] th, [data-testid="stTable"] td,
-    table, th, td {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border-color: #dee2e6 !important;
-    }
-    
-    /* Sidebar - White Background */
-    [data-testid="stSidebar"] { 
-        background-color: #ffffff !important; 
-        border-right: 1px solid #dee2e6;
-    }
-    [data-testid="stSidebar"] * { 
-        color: #1c2d3d !important; 
-    }
-
-    /* Action Buttons - Professional Blue with White Text */
-    .stButton > button { 
-        border-radius: 2px; 
-        height: 3rem; 
-        font-weight: 600;
-        color: #ffffff !important;
-        background-color: #0070f2 !important;
-        border: none !important;
-    }
-    .stButton > button:hover {
-        background-color: #0056b3 !important;
-        color: #ffffff !important;
-    }
-    .stButton > button:disabled {
-        background-color: #e9ecef !important;
-        color: #6c757d !important;
-    }
-    
-    /* Input Fields - White Background */
-    input, textarea, select, [data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border: 1px solid #dee2e6 !important;
-    }
-    
-    /* Selectbox specifically */
-    [data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-    [data-baseweb="select"] span, [data-baseweb="select"] div {
-        color: #1a1a1a !important;
-    }
-    
-    /* Captions and small text */
-    .st-emotion-cache-16idsys p, .caption, small {
-        color: #555555 !important;
-    }
-    
-    /* Multiselect */
-    [data-baseweb="tag"] {
-        background-color: #0070f2 !important;
-        color: #ffffff !important;
-    }
-    
-    /* Alert/Info boxes - force visibility */
-    [data-testid="stAlert"], [data-testid="stNotification"] {
-        background-color: #ffffff !important;
-        border: 1px solid #dee2e6 !important;
-    }
-    [data-testid="stAlert"] *, [data-testid="stNotification"] * {
-        color: #1a1a1a !important;
-    }
-    
-    /* Dropdown menu overlay - the popup list */
-    [role="listbox"] {
-        background-color: #ffffff !important;
-    }
-    [role="option"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-    [role="option"]:hover {
-        background-color: #f0f0f0 !important;
-        color: #1a1a1a !important;
+    /* Target specific metric parts to prevent truncation */
+    [data-testid="stMetricValue"] > div {
+        overflow: visible !important;
+        width: auto !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -254,7 +166,8 @@ if menu == "📈 Executive Dashboard":
 elif menu == "🎯 Sales Pipeline":
     st.markdown("<div class='crm-header'><h2>Sales Pipeline Management</h2></div>", unsafe_allow_html=True)
     
-    # Rep assignment section
+    # Calculate workloads once for the whole module
+    workloads = logic.get_rep_workloads(state.leads)
     st.markdown("### 👤 Daily Rep Assignments (Max 4)")
     st.info("Assign reps to leads. Matching rep specialty to lead tier gives +5% win bonus!")
     
@@ -273,44 +186,36 @@ elif menu == "🎯 Sales Pipeline":
                 
                 for lead in stage_leads:
                     with st.container(border=True):
-                        c1, c2, c3, c4 = st.columns([2, 1, 1.5, 1.5])
+                        c1, c2, c3, c4 = st.columns([1.2, 0.6, 0.6, 1.3])
                         
-                        c1.write(f"**{lead.company}**")
-                        c1.caption(f"ID: {lead.id} | {lead.tier}")
+                        with c1:
+                            st.markdown(f"**{lead.company}**")
+                            st.caption(f"ID: {lead.id} • {lead.tier}")
                         
-                        c2.metric("Value", f"${lead.value:,.0f}")
-                        c2.caption(f"Days: {lead.days_in_stage}")
+                        with c2:
+                            st.metric("Value", f"${lead.value:,.0f}")
                         
-                        c3.metric("Win Prob", f"{lead.base_win_probability}%")
+                        with c3:
+                            st.metric("Win Prob", f"{lead.base_win_probability}%")
                         
                         # Rep selector with specialty match indicators and efficiency
                         rep_options = ["Unassigned"]
                         rep_display_map = {"Unassigned": "Unassigned"}
                         
                         for rep_name, rep in state.reps.items():
-                            # Calculate what the effective probability WOULD BE if assigned
-                            # Don't modify the actual lead object
-                            base_prob = lead.base_win_probability
-                            eff_prob = base_prob + rep.win_bonus
-                            
-                            # Add specialty match bonus
-                            if lead.tier == rep.specialty:
-                                eff_prob += 5
-                            
-                            # Add streak effects
-                            if rep.streak >= 3:
-                                eff_prob += 5
-                            elif rep.streak <= -3:
-                                eff_prob -= 5
-                            
-                            eff_prob = min(100, max(0, eff_prob))
+                            load = workloads.get(rep_name, 0)
+                            # Calculate effective probability with overload penalty
+                            eff_prob = lead.get_effective_probability(state.reps, load)
                             
                             # Check if specialty matches this lead's tier
                             is_match = lead.tier == rep.specialty
                             match_icon = "🎯" if is_match else "⚡"
                             
-                            # Build display name with efficiency and specialty
-                            display_name = f"{rep_name} {match_icon} {eff_prob}% ({rep.level})"
+                            # Overload indicator
+                            load_icon = "🔴" if load >= 3 else "🟢"
+                            
+                            # Build display name with efficiency, specialty and LOAD
+                            display_name = f"{rep_name} {match_icon} {eff_prob}% (Load: {load}) {load_icon}"
                             rep_options.append(display_name)
                             rep_display_map[display_name] = rep_name
                         
@@ -338,7 +243,8 @@ elif menu == "🎯 Sales Pipeline":
                         if rep_name != "Unassigned":
                             logic.assign_rep_to_lead(state, lead.id, rep_name)
                             rep = state.reps[rep_name]
-                            eff_prob = lead.get_effective_probability(state.reps)
+                            load = workloads.get(rep_name, 0)
+                            eff_prob = lead.get_effective_probability(state.reps, load)
                             
                             # Specialty match indicator
                             specialty_match = lead.tier == rep.specialty
@@ -432,24 +338,28 @@ elif menu == "🎫 Service Desk":
         
         for ticket in open_tickets:
             with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([2, 1, 1, 2])
+                c1, c2, c3, c4 = st.columns([1.5, 0.6, 0.6, 1.5])
                 
-                c1.write(f"**Ticket #{ticket.id}**: {ticket.customer}")
-                c1.caption(ticket.issue)
+                with c1:
+                    st.write(f"**{ticket.customer}**")
+                    st.caption(f"Ticket #{ticket.id} • {ticket.issue}")
                 
-                severity_color = {"Low": "#2e7d32", "Medium": "#ed6c02", "High": "#d32f2f"}[ticket.severity]
-                c2.markdown(f"<span style='color:{severity_color}'>**{ticket.severity}**</span>", unsafe_allow_html=True)
+                with c2:
+                    severity_color = {"Low": "#2e7d32", "Medium": "#ed6c02", "High": "#d32f2f"}[ticket.severity]
+                    st.markdown(f"<p style='margin-bottom:0; font-size:0.8rem; color:#54698d'>SEVERITY</p><span style='color:{severity_color}; font-weight:700'>{ticket.severity}</span>", unsafe_allow_html=True)
                 
-                c3.write(f"Day {ticket.created_day}")
+                with c3:
+                    st.markdown(f"<p style='margin-bottom:0; font-size:0.8rem; color:#54698d'>OPEN SINCE</p><span style='font-weight:600'>Day {ticket.created_day}</span>", unsafe_allow_html=True)
                 
-                col_btns = c4.columns(2)
-                if col_btns[0].button("Standard ($300)", key=f"std_{ticket.id}", use_container_width=True):
-                    handle_resolve_ticket(ticket.id, False)
-                    st.rerun()
-                
-                if col_btns[1].button("Priority ($800)", key=f"pri_{ticket.id}", use_container_width=True):
-                    handle_resolve_ticket(ticket.id, True)
-                    st.rerun()
+                with c4:
+                    col_btns = st.columns(2)
+                    if col_btns[0].button("Standard ($300)", key=f"std_{ticket.id}", use_container_width=True):
+                        handle_resolve_ticket(ticket.id, False)
+                        st.rerun()
+                    
+                    if col_btns[1].button("Priority ($800)", key=f"pri_{ticket.id}", use_container_width=True):
+                        handle_resolve_ticket(ticket.id, True)
+                        st.rerun()
     
     st.divider()
     st.markdown("### 📊 Customer Health")
@@ -466,11 +376,13 @@ elif menu == "🎫 Service Desk":
 elif menu == "👥 Team Performance":
     st.markdown("<div class='crm-header'><h2>Sales Team Performance</h2></div>", unsafe_allow_html=True)
     
+    workloads = logic.get_rep_workloads(state.leads)
+    
     for rep_name, rep in state.reps.items():
         with st.container(border=True):
-            st.markdown(f"### 👤 {rep.name}")
+            st.markdown(f"#### 👤 {rep.name}")
             
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
             c1.metric("Level", rep.level)
             c2.metric("Closed", rep.deals_closed)
             c3.metric("Revenue", f"${rep.total_revenue:,.0f}")
@@ -479,13 +391,17 @@ elif menu == "👥 Team Performance":
             win_rate = (rep.deals_closed / total_deals * 100) if total_deals > 0 else 0
             c4.metric("Win Rate", f"{win_rate:.1f}%")
             
+            load = workloads.get(rep_name, 0)
+            load_status = "🟢 Low" if load <= 2 else "🟡 Medium" if load <= 4 else "🔴 OVERLOAD"
+            c5.metric("Current Load", f"{load} Deals", delta=load_status, delta_color="normal")
+            
             if rep.streak > 0:
                 streak_text = f"🔥 {rep.streak} wins"
             elif rep.streak < 0:
                 streak_text = f"❄️ {abs(rep.streak)} losses"
             else:
                 streak_text = "Neutral"
-            c5.metric("Streak", streak_text)
+            c6.metric("Streak", streak_text)
             
             st.caption(f"**Specialty**: {rep.specialty} | **Bonus**: +{rep.win_bonus}%")
 
