@@ -2,44 +2,49 @@ import ipywidgets as widgets
 from IPython.display import display, HTML, clear_output
 import unicodedata
 
-# Define the puzzles in a modular structure (v3)
+# Puzzles with Narrative and Educational Facts (v4)
 PUZZLES = [
     {
         "id": 1,
-        "title": "Room 1: El Almacén de Suministros",
+        "title": "Nivel 1: El Acceso al Almacén",
+        "story": "¡Emergencia! El sistema de gestión de inventarios se ha bloqueado. Para entrar al almacén principal, debes validar la variable base del lote económico.",
         "type": "text",
         "clue": "Busca la fórmula de 'Tamaño de lote económico' (EOQ).",
         "task": "¿Qué variable representa el 'Costo de preparación'?",
         "answer": "S",
-        "hint": "Consulta la página 26."
+        "hint": "Consulta la página 26.",
+        "fact": "EL EOQ ayuda a minimizar la suma de los costos de mantenimiento y de pedido.",
+        "img": "room1_almacen_1772051105275.png"
     },
     {
         "id": 2,
-        "title": "Room 2: El Laboratorio de Pronósticos",
+        "title": "Nivel 2: Laboratorio de Análisis",
+        "story": "Has entrado, pero los sensores de demanda están descalibrados. Necesitamos cruzar datos de dos herramientas analíticas diferentes.",
         "type": "numeric",
-        "clue": "Localiza las secciones de 'Suavizamiento exponencial doble' y 'MAPE'.",
+        "clue": "Localiza 'Suavizamiento exponencial doble' y 'MAPE'.",
         "task": "Suma los números de página donde aparecen estos dos conceptos.",
         "answer": "51",
-        "hint": "Pág 25 + Pág 26 = 51."
+        "hint": "Pág 25 + Pág 26 = 51.",
+        "fact": "El MAPE es una de las métricas más usadas para medir la precisión de los pronósticos de ventas.",
+        "img": "room2_pronosticos_1772051159434.png"
     },
     {
         "id": 3,
-        "title": "Room 3: El Centro Logístico",
+        "title": "Nivel 3: El Hub Geográfico",
+        "story": "Los camiones están perdidos. Debemos recalcular el centro de mando para optimizar las rutas de transporte.",
         "type": "choice",
         "clue": "Revisa la sección de 'Centro de gravedad'.",
         "task": "¿Qué representa la variable 'w_i'?",
-        "choices": [
-            "peso de la unidad",
-            "ponderación del indicador",
-            "ancho de la vía",
-            "valor del inventario"
-        ],
+        "choices": ["peso de la unidad", "ponderación del indicador", "ancho de la vía", "valor del inventario"],
         "answer": "ponderación del indicador",
-        "hint": "Mira la sección 'donde:' en la página 28."
+        "hint": "Mira la sección 'donde:' en la página 28.",
+        "fact": "El método del centro de gravedad es ideal para ubicar una nueva planta o almacén minimizando costos de transporte.",
+        "img": "room3_logistica_1772051224734.png"
     },
     {
         "id": 4,
-        "title": "Room 4: La Sala de Control de Métricas",
+        "title": "Nivel 4: Terminal de Despacho",
+        "story": "Los clientes están llamando. La precisión de las entregas ha caído. Debemos reajustar el indicador de desempeño.",
         "type": "choice",
         "clue": "Encuentra la métrica '% Precisión de entrega'.",
         "task": "¿Cuál es el texto exacto del denominador en la fórmula?",
@@ -50,32 +55,41 @@ PUZZLES = [
             "Gastos de operación"
         ],
         "answer": "Valor del producto que se envió al cliente",
-        "hint": "Revisa la página 28."
+        "hint": "Revisa la página 28.",
+        "fact": "Una alta precisión de entrega reduce las devoluciones y mejora la satisfacción del cliente.",
+        "img": "room4_metricas_1772051319592.png"
     },
     {
         "id": 5,
-        "title": "Room 5: Cálculo de Lote Económico",
+        "title": "Nivel 5: Crisis de Inventario",
+        "story": "¡Niveles críticos! Las máquinas necesitan saber exactamente cuánto pedir para no detener la producción.",
         "type": "numeric",
         "clue": "Usa la fórmula de Q* (EOQ).",
-        "task": "Si la demanda anual (D) es 2000, el costo de preparación (S) es 100 y el costo de mantener (H) es 10, ¿cuál es el lote económico (Q*)?",
+        "task": "Si D=2000, S=100 y H=10, ¿cuál es el lote económico (Q*)?",
         "answer": "200",
-        "hint": "Q* = √((2 * 2000 * 100) / 10) = √40000. Página 26."
+        "hint": "√(2*2000*100/10) = √40000. Pág 26.",
+        "fact": "El modelo EOQ asume una demanda constante, lo cual es raro pero útil como base teórica.",
+        "img": "room5_inventario_crisis_1772051533783.png"
     },
     {
         "id": 6,
-        "title": "Room 6: El Radar de Rastreo",
+        "title": "Nivel 6: El Radar de Seguimiento",
+        "story": "Se ha detectado una anomalía en el flujo. La señal de rastreo está fuera de los límites permitidos.",
         "type": "text",
-        "clue": "Busca la fórmula de 'Señal de rastreo'.",
-        "task": "¿Qué sigla aparece en el denominador de esta fórmula?",
+        "clue": "Busca 'Señal de rastreo'.",
+        "task": "¿Qué sigla aparece en el denominador?",
         "answer": "DAM",
-        "hint": "Página 25. Significa Desviación Absoluta Media."
+        "hint": "Página 25. Desviación Absoluta Media.",
+        "fact": "La señal de rastreo indica si un modelo de pronóstico está sesgado hacia arriba o hacia abajo.",
+        "img": "room6_radar_1772051661772.png"
     },
     {
         "id": 7,
-        "title": "Room 7: Inventarios de Calidad",
+        "title": "Nivel 7: Control de Calidad Total",
+        "story": "No basta con entregar, hay que entregar bien. El RIANSC nos dirá si estamos cumpliendo el estándar.",
         "type": "choice",
-        "clue": "Revisa la sección de 'Inventarios'.",
-        "task": "¿Qué significa la sigla 'RIANSC'?",
+        "clue": "Busca 'RIANSC'.",
+        "task": "¿Qué significa exactamente esta sigla?",
         "choices": [
             "Rotación de inventario acumulada no solicitada",
             "Rendimiento inicial de activos no servidos",
@@ -83,40 +97,46 @@ PUZZLES = [
             "Relación de inventario anual sobre costos"
         ],
         "answer": "Rotación del inventario ajustado al nivel del servicio del cliente",
-        "hint": "Página 29."
+        "hint": "Página 29.",
+        "fact": "Este indicador vincula la eficiencia logística directamente con el nivel de servicio prometido.",
+        "img": "room4_metricas_1772051319592.png"
     },
     {
         "id": 8,
-        "title": "Room 8: El Cuello de Botella",
+        "title": "Nivel 8: El Flujo Maestro",
+        "story": "La línea de producción se está ralentizando. El cuello de botella es evidente. Calcula la capacidad máxima.",
         "type": "choice",
         "clue": "Localiza 'Planeación de recursos'.",
         "task": "¿Cuál es el denominador en la fórmula de 'Producción máxima'?",
-        "choices": [
-            "Tiempo de trabajo",
-            "Tiempo promedio de llegada",
-            "Tiempo del cuello de botella",
-            "Demanda del cliente"
-        ],
+        "choices": ["Tiempo de trabajo", "Tiempo promedio de llegada", "Tiempo del cuello de botella", "Demanda del cliente"],
         "answer": "Tiempo del cuello de botella",
-        "hint": "Página 28."
+        "hint": "Página 28.",
+        "fact": "La teoría de restricciones dice que la producción total está limitada por el recurso más lento.",
+        "img": "room5_inventario_crisis_1772051533783.png"
     },
     {
         "id": 9,
-        "title": "Room 9: Efectividad de Ventas",
+        "title": "Nivel 9: El Cierre de Ventas",
+        "story": "Estamos en la recta final. Evalúa la efectividad comercial antes de sellar el contrato global.",
         "type": "numeric",
-        "clue": "Busca la fórmula del Índice de Efectividad de Ventas (IEV).",
+        "clue": "Busca el Índice de Efectividad de Ventas (IEV).",
         "task": "¿Cuántos componentes se multiplican para obtener el IEV?",
         "answer": "3",
-        "hint": "Mira la fórmula en la página 30."
+        "hint": "Página 30.",
+        "fact": "El IEV combina utilización, flujo y calidad de ventas en un solo número estrella.",
+        "img": "room2_pronosticos_1772051159434.png"
     },
     {
         "id": 10,
-        "title": "Room 10: El Coeficiente Maestro",
+        "title": "Nivel 10: La Bóveda Logística",
+        "story": "Llegaste a la puerta final. Solo un verdadero ingeniero industrial puede descifrar la correlación absoluta para abrir la bóveda.",
         "type": "numeric",
-        "clue": "Estudia la fórmula del 'Coeficiente de correlación'.",
-        "task": "Cuenta el número total de veces que aparece el símbolo de sumatoria (Σ) en toda la expresión de 'r'.",
+        "clue": "Estudia el 'Coeficiente de correlación'.",
+        "task": "Cuenta el número total de Σ en toda la expresión de 'r'.",
         "answer": "7",
-        "hint": "Página 25. 3 en el numerador y 4 en el denominador (bajo la raíz)."
+        "hint": "Pág 25. Son 3 arriba y 4 abajo.",
+        "fact": "Un coeficiente de 1 indica una relación perfecta, el sueño de cualquier planificador de demanda.",
+        "img": "room1_almacen_1772051105275.png"
     }
 ]
 
@@ -129,25 +149,28 @@ class GameLogic:
         self.completed = False
         self.hints_used = 0
         self.room_hint_used = False
+        self.show_fact = False
 
     def normalize(self, s):
-        if not isinstance(s, str):
-            s = str(s)
+        if not isinstance(s, str): s = str(s)
+        import unicodedata
         s = s.lower().strip()
-        return "".join(c for c in unicodedata.normalize('NFD', s)
-                      if unicodedata.category(c) != 'Mn')
+        return "".join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
     def check_answer(self, user_answer):
         puzzle = PUZZLES[self.current_room]
-        
         if self.normalize(user_answer) == self.normalize(puzzle['answer']):
-            self.current_room += 1
-            self.room_hint_used = False
-            if self.current_room >= len(PUZZLES):
-                self.completed = True
-            return True, "¡Correcto! Has avanzado de nivel."
+            self.show_fact = True
+            return True, f"✅ ¡LOGRADO! {puzzle['fact']}"
         else:
-            return False, f"Incorrecto. Intenta de nuevo. Revisa tu formulario."
+            return False, "❌ Acceso denegado. Revisa tus cálculos o el formulario."
+
+    def next_level(self):
+        self.current_room += 1
+        self.room_hint_used = False
+        self.show_fact = False
+        if self.current_room >= len(PUZZLES):
+            self.completed = True
 
     def use_hint(self):
         if not self.room_hint_used:
@@ -159,12 +182,12 @@ class GameLogic:
         return (self.current_room / len(PUZZLES)) * 100
 
     def get_rank(self):
-        if self.hints_used == 0: return "Maestro de Suministros (0 pistas)"
-        if self.hints_used <= 3: return "Experto Logístico (1-3 pistas)"
-        if self.hints_used <= 6: return "Analista Jr. (4-6 pistas)"
-        return "Estudiante de Repaso (7+ pistas)"
+        if self.hints_used == 0: return "DIAMANTE: Maestro de Suministros 💎"
+        if self.hints_used <= 2: return "ORO: Estratega Senior 🥇"
+        if self.hints_used <= 5: return "PLATA: Analista de Procesos 🥈"
+        return "BRONCE: Pasante en Práctica 🥉"
 
-# Colab UI Implementation
+# Colab UI Implementation (v4)
 class ColabGame:
     def __init__(self):
         self.logic = GameLogic(platform="colab")
@@ -179,9 +202,8 @@ class ColabGame:
             if self.logic.completed:
                 display(HTML(f"""
                     <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; border: 1px solid #c3e6cb;">
-                        <h2 style="color: #155724;">🎉 ¡FELICIDADES! 🎉</h2>
-                        <p>Has escapado con éxito. Rango: <b>{self.logic.get_rank()}</b></p>
-                        <p>Pistas totales: <b>{self.logic.hints_used}</b></p>
+                        <h2 style="color: #155724;">🎉 ¡MISIÓN CUMPLIDA! 🎉</h2>
+                        <p>Has salvado la fábrica global. Rango: <b>{self.logic.get_rank()}</b></p>
                         <p style="font-size: 20px; font-weight: bold;">PALABRA CLAVE FINAL: <span style="color: #721c24;">{FINAL_KEYWORD}</span></p>
                     </div>
                 """))
@@ -192,36 +214,50 @@ class ColabGame:
             # Progress bar
             progress = widgets.FloatProgress(
                 value=self.logic.get_progress(), min=0, max=100,
-                description='Progreso:', bar_style='info'
+                description='Prioridad:', bar_style='info'
             )
             
-            display(HTML(f"<h3>{puzzle['title']}</h3>"))
-            display(HTML(f"<p><b>🔍 Contexto:</b> {puzzle['clue']}</p>"))
-            display(HTML(f"<p><b>🎯 Reto:</b> {puzzle['task']}</p>"))
+            display(HTML(f"<h2 style='color:#007bff;'>{puzzle['title']}</h2>"))
+            display(HTML(f"<p style='font-style:italic; color:#555;'>{puzzle['story']}</p>"))
             
-            # Input based on type
-            if puzzle['type'] == 'choice':
-                ans_input = widgets.Dropdown(options=["-- Selecciona --"] + puzzle['choices'])
-            else:
-                ans_input = widgets.Text(placeholder='Respuesta...')
+            if not self.logic.show_fact:
+                display(HTML(f"<p><b>🔍 Contexto:</b> {puzzle['clue']}</p>"))
+                display(HTML(f"<p><b>🎯 Tarea:</b> {puzzle['task']}</p>"))
                 
-            btn_valid = widgets.Button(description="Validar", button_style='success')
-            btn_hint = widgets.Button(description="⚠️ Ver Pista", button_style='warning')
-            feedback = widgets.Label(value="")
-            hint_label = widgets.Label(value="")
+                if puzzle['type'] == 'choice':
+                    ans_input = widgets.Dropdown(options=["-- Selecciona --"] + puzzle['choices'])
+                else:
+                    ans_input = widgets.Text(placeholder='Respuesta...')
+                    
+                btn_valid = widgets.Button(description="Validar Sistema", button_style='success')
+                btn_hint = widgets.Button(description="💡 Ver Pista", button_style='warning')
+                feedback = widgets.Label(value="")
 
-            def on_valid(b):
-                correct, msg = self.logic.check_answer(ans_input.value)
-                feedback.value = msg
-                if correct:
+                def on_valid(b):
+                    correct, msg = self.logic.check_answer(ans_input.value)
+                    if correct:
+                        self.render()
+                    else:
+                        feedback.value = msg
+
+                def on_hint(b):
+                    display(HTML(f"<p style='color:#856404;'><b>Pista:</b> {self.logic.use_hint()}</p>"))
+
+                btn_valid.on_click(on_valid)
+                btn_hint.on_click(on_hint)
+                display(progress, ans_input, widgets.HBox([btn_valid, btn_hint]), feedback)
+            else:
+                display(HTML(f"""
+                    <div style="background-color: #e7f3ff; padding: 15px; border-radius: 8px; border: 1px solid #b8daff;">
+                        <p style="color: #004085;">✅ <b>¡LOGRADO!</b></p>
+                        <p><i>{puzzle['fact']}</i></p>
+                    </div>
+                """))
+                btn_next = widgets.Button(description="Siguiente Sala ➡️", button_style='primary')
+                def on_next(b):
+                    self.logic.next_level()
                     self.render()
-
-            def on_hint(b):
-                hint_label.value = f"Pista: {self.logic.use_hint()}"
-
-            btn_valid.on_click(on_valid)
-            btn_hint.on_click(on_hint)
-            
-            display(progress, ans_input, widgets.HBox([btn_valid, btn_hint]), feedback, hint_label)
+                btn_next.on_click(on_next)
+                display(btn_next)
             
         display(self.output)

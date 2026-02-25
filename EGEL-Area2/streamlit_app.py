@@ -1,86 +1,114 @@
 import streamlit as st
 from game_utils import PUZZLES, FINAL_KEYWORD, GameLogic
+import os
 
-# Page Config
-st.set_page_config(page_title="SCM Escape Room v3", page_icon="🔒", layout="centered")
+# Page Config - WIDE LAYOUT for laptops/tablets
+st.set_page_config(page_title="Mega-Factory Escape", page_icon="🏭", layout="wide")
 
-# CSS
+# Artifact path for images
+IMG_BASE_PATH = "C:/Users/vince/.gemini/antigravity/brain/083e8173-f969-4ba8-9fc1-209779487575"
+
+# Dark Theme CSS (Optimized for density & no scrolling)
 st.markdown("""
-    <style>
-    .stProgress > div > div > div > div { background-color: #4CAF50; }
-    .room-card {
-        background: white; padding: 1.5em; border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 1.5em;
-        border-left: 5px solid #4CAF50;
+<style>
+    .main { background-color: #0e1117; color: #ffffff; }
+    .stApp { background-color: #0e1117; }
+    .room-container {
+        background: #1a1c24; border: 1px solid #30363d;
+        padding: 1.2em; border-radius: 12px; margin-bottom: 0.5em;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.5);
     }
-    .hint-text { color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+    .story-text { font-style: italic; color: #8b949e; font-size: 0.95em; border-left: 3px solid #58a6ff; padding-left: 15px; margin-bottom: 1em; }
+    .fact-box { background: #161b22; color: #58a6ff; padding: 12px; border-radius: 8px; border: 1px dashed #58a6ff; margin: 10px 0; }
+    .stSelectbox label, .stTextInput label { font-size: 0.85em; color: #8b949e; }
+    [data-testid="stSidebar"] { min-width: 250px; max-width: 350px; }
+    .stButton>button { border-radius: 8px; }
+    h3 { margin-top: 0 !important; }
+</style>
+""", unsafe_allow_html=True)
 
+# Session States
 if 'game_logic' not in st.session_state:
     st.session_state.game_logic = GameLogic(platform="streamlit")
+if 'show_hint' not in st.session_state:
+    st.session_state.show_hint = False
 
 logic = st.session_state.game_logic
 
-st.title("🔐 Supply Chain Escape Room")
-st.caption("EGEL Plus IINDU - Verificación de Formulario")
+# Header
+st.title("🛡️ Mega-Factory: Lockdown")
 
+# Sidebar: Mission Status & Visuals
+with st.sidebar:
+    st.markdown("<h2 style='text-align:center; color:#58a6ff; margin-bottom:0;'>MISSION CONTROL</h2>", unsafe_allow_html=True)
+    st.progress(logic.get_progress()/100)
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Sala", f"{logic.current_room + 1}/10")
+    c2.metric("Pistas", logic.hints_used)
+    
+    st.divider()
+    
+    # Visuals moved to sidebar as requested
+    if not logic.completed:
+        puzzle = PUZZLES[logic.current_room]
+        if puzzle['img']:
+            img_path = os.path.join(IMG_BASE_PATH, puzzle['img'])
+            if os.path.exists(img_path):
+                st.image(img_path, caption=f"Ubicación: {puzzle['title']}")
+            else:
+                st.warning(f"Cargando visual de {puzzle['title']}...")
+    
+    st.info("💡 Usa el Formulario SCM (Págs 24-30).")
+
+# Main Stage
 if logic.completed:
     st.balloons()
-    st.success("## 🏆 ESCAPE COMPLETADO")
-    st.write(f"Tu rango: **{logic.get_rank()}**")
-    st.write(f"Pistas utilizadas: **{logic.hints_used}**")
-    st.markdown(f"<div style='text-align:center; padding:20px; background:#f8f9fa; border:2px dashed #4CAF50; border-radius:10px;'><h3>🔑 CLAVE FINAL: {FINAL_KEYWORD}</h3></div>", unsafe_allow_html=True)
-    if st.button("Reintentar (Reset)"):
+    st.success("## 🏆 MISIÓN CUMPLIDA")
+    st.write("¡Has salvado la fábrica global!")
+    st.write(f"Rango de Honor: **{logic.get_rank()}**")
+    st.markdown(f"<div style='font-size:2em; text-align:center; padding:20px; border:4px double #4CAF50; background:#161b22;'>🔑 CLAVE FINAL: {FINAL_KEYWORD}</div>", unsafe_allow_html=True)
+    if st.button("Nueva Partida"):
         st.session_state.game_logic = GameLogic(platform="streamlit")
         st.rerun()
 else:
-    # Sidebar stats
-    st.sidebar.metric("Nivel", f"{logic.current_room + 1} / {len(PUZZLES)}")
-    st.sidebar.metric("Pistas Usadas", logic.hints_used)
-    
-    st.progress(logic.get_progress()/100)
-    
     puzzle = PUZZLES[logic.current_room]
     
-    with st.container():
-        st.markdown(f"""
-            <div class="room-card">
-                <h3>{puzzle['title']}</h3>
-                <p><b>🔍 Contexto:</b> {puzzle['clue']}</p>
-                <hr>
-                <p><b>🎯 Tarea:</b> {puzzle['task']}</p>
-            </div>
-        """, unsafe_allow_html=True)
-
+    st.markdown(f"<div class='room-container'>", unsafe_allow_html=True)
+    st.subheader(puzzle['title'])
+    st.markdown(f"<p class='story-text'>{puzzle['story']}</p>", unsafe_allow_html=True)
+    
+    st.markdown(f"**🔍 Análisis de Situación:** {puzzle['clue']}")
+    st.markdown(f"**🎯 Requerimiento:** {puzzle['task']}")
+    
+    if not logic.show_fact:
         if puzzle['type'] == 'choice':
-            user_ans = st.selectbox("Selecciona la opción correcta:", ["-- Elige una --"] + puzzle['choices'], key=f"sel_{logic.current_room}")
-        elif puzzle['type'] == 'numeric':
-            user_ans = st.text_input("Ingresa un número:", key=f"num_{logic.current_room}")
+            user_ans = st.selectbox("Comando de Desbloqueo:", ["-- Selecciona --"] + puzzle['choices'], key=f"sel_{logic.current_room}")
         else:
-            user_ans = st.text_input("Ingresa tu respuesta:", key=f"txt_{logic.current_room}")
+            user_ans = st.text_input("Comando de Desbloqueo:", key=f"ans_{logic.current_room}", placeholder="Escriba aquí...")
 
-        col1, col2 = st.columns([1,1])
-        with col1:
-            if st.button("Validar Respuesta", type="primary"):
-                if user_ans and user_ans != "-- Elige una --":
+        act_col1, act_col2 = st.columns([1,1])
+        with act_col1:
+            if st.button("⚡ Ejecutar Protocolo", type="primary", use_container_width=True):
+                if user_ans and user_ans not in ["-- Selecciona --", "-- Elige --"]:
                     correct, msg = logic.check_answer(user_ans)
                     if correct:
-                        st.success(msg)
                         st.rerun()
                     else:
                         st.error(msg)
                 else:
-                    st.warning("Debes ingresar una respuesta.")
-        
-        with col2:
-            if st.button("💡 Ver Pista"):
+                    st.warning("Ingrese un código de acceso.")
+        with act_col2:
+            if st.button("💡 Solicitar Pista", use_container_width=True):
                 st.session_state.show_hint = True
         
         if st.session_state.get('show_hint', False):
-            hint = logic.use_hint()
-            st.markdown(f"<div class='hint-text'><b>Pista:</b> {hint}</div>", unsafe_allow_html=True)
-            # Reset hint visibility on next run unless button clicked again
+            st.info(f"Frecuencia detectada: {logic.use_hint()}")
             st.session_state.show_hint = False
-
-st.sidebar.info("Usa tu PDF oficial (Páginas 24-30) para encontrar las respuestas. ¡Buena suerte!")
+    else:
+        st.markdown(f"<div class='fact-box'>💡 <b>PROTOCOLO APRENDIDO</b><br>{puzzle['fact']}</div>", unsafe_allow_html=True)
+        if st.button("Entrar a la siguiente sala 🔓", type="primary", use_container_width=True):
+            logic.next_level()
+            st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
