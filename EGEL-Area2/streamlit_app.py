@@ -32,83 +32,103 @@ if 'game_logic' not in st.session_state:
     st.session_state.game_logic = GameLogic(platform="streamlit")
 if 'show_hint' not in st.session_state:
     st.session_state.show_hint = False
+if 'game_started' not in st.session_state:
+    st.session_state.game_started = False
 
 logic = st.session_state.game_logic
 
 # Header
 st.title("🛡️ Mega-Factory: Lockdown")
 
-# Sidebar: Mission Status & Visuals
-with st.sidebar:
-    st.markdown("<h2 style='text-align:center; color:#58a6ff; margin-bottom:0;'>MISSION CONTROL</h2>", unsafe_allow_html=True)
-    st.progress(logic.get_progress()/100)
+if not st.session_state.game_started:
+    st.markdown("<div class='room-container'>", unsafe_allow_html=True)
+    st.markdown("### 🛑 Acceso Restringido: Nivel 0")
+    st.info("La fábrica está en cierre de emergencia. Todos los ingenieros deben iniciar la misión simultáneamente.")
     
-    c1, c2 = st.columns(2)
-    c1.metric("Sala", f"{logic.current_room + 1}/10")
-    c2.metric("Pistas", logic.hints_used)
+    start_code = st.text_input("Ingrese el Código de Autorización General:", placeholder="Código de 3 letras...", key="start_input")
     
-    st.divider()
-    
-    # Visuals moved to sidebar as requested
-    if not logic.completed:
-        puzzle = PUZZLES[logic.current_room]
-        if puzzle['img']:
-            img_path = os.path.join(IMG_BASE_PATH, puzzle['img'])
-            if os.path.exists(img_path):
-                st.image(img_path, caption=f"Ubicación: {puzzle['title']}")
-            else:
-                st.warning(f"Cargando visual de {puzzle['title']}...")
-    
-    st.info("💡 Usa el Formulario SCM (Págs 24-30).")
-
-# Main Stage
-if logic.completed:
-    st.balloons()
-    st.success("## 🏆 MISIÓN CUMPLIDA")
-    st.write("¡Has salvado la fábrica global!")
-    st.write(f"Rango de Honor: **{logic.get_rank()}**")
-    st.markdown(f"<div style='font-size:2em; text-align:center; padding:20px; border:4px double #4CAF50; background:#161b22;'>🔑 CLAVE FINAL: {FINAL_KEYWORD}</div>", unsafe_allow_html=True)
-    if st.button("Nueva Partida"):
-        st.session_state.game_logic = GameLogic(platform="streamlit")
-        st.rerun()
-else:
-    puzzle = PUZZLES[logic.current_room]
-    
-    st.markdown(f"<div class='room-container'>", unsafe_allow_html=True)
-    st.subheader(puzzle['title'])
-    st.markdown(f"<p class='story-text'>{puzzle['story']}</p>", unsafe_allow_html=True)
-    
-    st.markdown(f"**🔍 Análisis de Situación:** {puzzle['clue']}")
-    st.markdown(f"**🎯 Requerimiento:** {puzzle['task']}")
-    
-    if not logic.show_fact:
-        if puzzle['type'] == 'choice':
-            user_ans = st.selectbox("Comando de Desbloqueo:", ["-- Selecciona --"] + puzzle['choices'], key=f"sel_{logic.current_room}")
-        else:
-            user_ans = st.text_input("Comando de Desbloqueo:", key=f"ans_{logic.current_room}", placeholder="Escriba aquí...")
-
-        act_col1, act_col2 = st.columns([1,1])
-        with act_col1:
-            if st.button("⚡ Ejecutar Protocolo", type="primary", use_container_width=True):
-                if user_ans and user_ans not in ["-- Selecciona --", "-- Elige --"]:
-                    correct, msg = logic.check_answer(user_ans)
-                    if correct:
-                        st.rerun()
-                    else:
-                        st.error(msg)
-                else:
-                    st.warning("Ingrese un código de acceso.")
-        with act_col2:
-            if st.button("💡 Solicitar Pista", use_container_width=True):
-                st.session_state.show_hint = True
-        
-        if st.session_state.get('show_hint', False):
-            st.info(f"Frecuencia detectada: {logic.use_hint()}")
-            st.session_state.show_hint = False
-    else:
-        st.markdown(f"<div class='fact-box'>💡 <b>PROTOCOLO APRENDIDO</b><br>{puzzle['fact']}</div>", unsafe_allow_html=True)
-        if st.button("Entrar a la siguiente sala 🔓", type="primary", use_container_width=True):
-            logic.next_level()
+    if st.button("Iniciar Misión General", type="primary"):
+        if start_code.strip().upper() == "TEC":
+            st.session_state.game_started = True
             st.rerun()
-    
+        else:
+            st.error("❌ Código incorrecto. Espera a que el supervisor dicte la clave.")
+            
     st.markdown("</div>", unsafe_allow_html=True)
+
+else:
+    # Sidebar: Mission Status & Visuals
+    with st.sidebar:
+        st.markdown("<h2 style='text-align:center; color:#58a6ff; margin-bottom:0;'>MISSION CONTROL</h2>", unsafe_allow_html=True)
+        st.progress(logic.get_progress()/100)
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Sala", f"{logic.current_room + 1}/10")
+        c2.metric("Pistas", logic.hints_used)
+        
+        st.divider()
+        
+        # Visuals moved to sidebar as requested
+        if not logic.completed:
+            puzzle = PUZZLES[logic.current_room]
+            if puzzle['img']:
+                img_path = os.path.join(IMG_BASE_PATH, puzzle['img'])
+                if os.path.exists(img_path):
+                    st.image(img_path, caption=f"Ubicación: {puzzle['title']}")
+                else:
+                    st.warning(f"Cargando visual de {puzzle['title']}...")
+        
+        st.info("💡 Usa el Formulario EGEL PLUS IINDU (Págs 24-30).")
+
+    # Main Stage
+    if logic.completed:
+        st.balloons()
+        st.success("## 🏆 MISIÓN CUMPLIDA")
+        st.write("¡Has salvado la fábrica global!")
+        st.write(f"Rango de Honor: **{logic.get_rank()}**")
+        st.markdown(f"<div style='font-size:2em; text-align:center; padding:20px; border:4px double #4CAF50; background:#161b22;'>🔑 CLAVE FINAL: {FINAL_KEYWORD}</div>", unsafe_allow_html=True)
+        if st.button("Nueva Partida"):
+            st.session_state.game_logic = GameLogic(platform="streamlit")
+            st.session_state.game_started = False
+            st.rerun()
+    else:
+        puzzle = PUZZLES[logic.current_room]
+        
+        st.markdown(f"<div class='room-container'>", unsafe_allow_html=True)
+        st.subheader(puzzle['title'])
+        st.markdown(f"<p class='story-text'>{puzzle['story']}</p>", unsafe_allow_html=True)
+        
+        st.markdown(f"**🔍 Análisis de Situación:** {puzzle['clue']}")
+        st.markdown(f"**🎯 Requerimiento:** {puzzle['task']}")
+        
+        if not logic.show_fact:
+            if puzzle['type'] == 'choice':
+                user_ans = st.selectbox("Comando de Desbloqueo:", ["-- Selecciona --"] + puzzle['choices'], key=f"sel_{logic.current_room}")
+            else:
+                user_ans = st.text_input("Comando de Desbloqueo:", key=f"ans_{logic.current_room}", placeholder="Escriba aquí...")
+
+            act_col1, act_col2 = st.columns([1,1])
+            with act_col1:
+                if st.button("⚡ Ejecutar Protocolo", type="primary", use_container_width=True):
+                    if user_ans and user_ans not in ["-- Selecciona --", "-- Elige --"]:
+                        correct, msg = logic.check_answer(user_ans)
+                        if correct:
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                    else:
+                        st.warning("Ingrese un código de acceso.")
+            with act_col2:
+                if st.button("💡 Solicitar Pista", use_container_width=True):
+                    st.session_state.show_hint = True
+            
+            if st.session_state.get('show_hint', False):
+                st.info(f"Frecuencia detectada: {logic.use_hint()}")
+                st.session_state.show_hint = False
+        else:
+            st.markdown(f"<div class='fact-box'>💡 <b>PROTOCOLO APRENDIDO</b><br>{puzzle['fact']}</div>", unsafe_allow_html=True)
+            if st.button("Entrar a la siguiente sala 🔓", type="primary", use_container_width=True):
+                logic.next_level()
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
