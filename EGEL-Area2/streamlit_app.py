@@ -23,6 +23,12 @@ st.markdown("""
     .fact-box { background: #161b22; color: #58a6ff; padding: 12px; border-radius: 8px; border: 1px dashed #58a6ff; margin: 10px 0; }
     .stSelectbox label, .stTextInput label { font-size: 0.85em; color: #8b949e; }
     [data-testid="stSidebar"] { min-width: 250px; max-width: 350px; }
+    [data-testid="stSidebar"] [data-testid="stImage"] img {
+        height: 220px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid #30363d;
+    }
     .stButton>button { border-radius: 8px; }
     h3 { margin-top: 0 !important; }
 </style>
@@ -75,7 +81,7 @@ else:
             if puzzle['img']:
                 img_path = os.path.join(IMG_BASE_PATH, puzzle['img'])
                 if os.path.exists(img_path):
-                    st.image(img_path, caption=f"Ubicación: {puzzle['title']}")
+                    st.image(img_path, caption=f"Ubicación: {puzzle['title']}", use_container_width=True)
                 else:
                     st.warning(f"Cargando visual de {puzzle['title']}...")
         
