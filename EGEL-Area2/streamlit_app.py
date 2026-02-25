@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Mega-Factory Escape", page_icon="🏭", layout="wide")
 
 # Artifact path for images
-IMG_BASE_PATH = "C:/Users/vince/.gemini/antigravity/brain/083e8173-f969-4ba8-9fc1-209779487575"
+IMG_BASE_PATH = "images"
 
 # Dark Theme CSS (Optimized for density & no scrolling)
 st.markdown("""

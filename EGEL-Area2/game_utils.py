@@ -99,7 +99,7 @@ PUZZLES = [
         "answer": "Rotación del inventario ajustado al nivel del servicio del cliente",
         "hint": "Página 29.",
         "fact": "Este indicador vincula la eficiencia logística directamente con el nivel de servicio prometido.",
-        "img": "room4_metricas_1772051319592.png"
+        "img": "room7_laser_scanner.png"
     },
     {
         "id": 8,
@@ -112,7 +112,7 @@ PUZZLES = [
         "answer": "Tiempo del cuello de botella",
         "hint": "Página 28.",
         "fact": "La teoría de restricciones dice que la producción total está limitada por el recurso más lento.",
-        "img": "room5_inventario_crisis_1772051533783.png"
+        "img": "room8_mechanical_assembly.png"
     },
     {
         "id": 9,
@@ -124,7 +124,7 @@ PUZZLES = [
         "answer": "3",
         "hint": "Página 30.",
         "fact": "El IEV combina utilización, flujo y calidad de ventas en un solo número estrella.",
-        "img": "room2_pronosticos_1772051159434.png"
+        "img": "room9_coorporate_office.png"
     },
     {
         "id": 10,
@@ -136,7 +136,7 @@ PUZZLES = [
         "answer": "7",
         "hint": "Pág 25. Son 3 arriba y 4 abajo.",
         "fact": "Un coeficiente de 1 indica una relación perfecta, el sueño de cualquier planificador de demanda.",
-        "img": "room1_almacen_1772051105275.png"
+        "img": "room10_vault.png"
     }
 ]
 
