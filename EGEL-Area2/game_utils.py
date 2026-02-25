@@ -1,5 +1,10 @@
-import ipywidgets as widgets
-from IPython.display import display, HTML, clear_output
+try:
+    import ipywidgets as widgets
+    from IPython.display import display, HTML, clear_output
+    HAS_NOTEBOOK_DEPS = True
+except ImportError:
+    HAS_NOTEBOOK_DEPS = False
+
 import unicodedata
 
 # Puzzles with Narrative and Educational Facts (v4)
