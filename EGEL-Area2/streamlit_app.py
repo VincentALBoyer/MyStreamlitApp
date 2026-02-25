@@ -19,17 +19,12 @@ st.markdown("""
         padding: 1.2em; border-radius: 12px; margin-bottom: 0.5em;
         box-shadow: 0 4px 8px rgba(0,0,0,0.5);
     }
-    .story-text { font-style: italic; color: #8b949e; font-size: 0.95em; border-left: 3px solid #58a6ff; padding-left: 15px; margin-bottom: 1em; }
+    .story-text { font-style: italic; color: #a5adb9; font-size: 0.95em; border-left: 3px solid #58a6ff; padding-left: 15px; margin-bottom: 1em; }
     .fact-box { background: #161b22; color: #58a6ff; padding: 12px; border-radius: 8px; border: 1px dashed #58a6ff; margin: 10px 0; }
     .stSelectbox label, .stTextInput label { font-size: 0.85em; color: #8b949e; }
     [data-testid="stSidebar"] { min-width: 250px; max-width: 350px; }
-    [data-testid="stSidebar"] [data-testid="stImage"] img {
-        height: 220px;
-        object-fit: cover;
-        border-radius: 10px;
-        border: 1px solid #30363d;
-    }
     .stButton>button { border-radius: 8px; }
+    h1, h2, h3 { color: #ffffff !important; }
     h3 { margin-top: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -81,7 +76,7 @@ else:
             if puzzle['img']:
                 img_path = os.path.join(IMG_BASE_PATH, puzzle['img'])
                 if os.path.exists(img_path):
-                    st.image(img_path, caption=f"Ubicación: {puzzle['title']}", use_container_width=True)
+                    st.image(img_path, caption=f"Ubicación: {puzzle['title']}")
                 else:
                     st.warning(f"Cargando visual de {puzzle['title']}...")
         
@@ -93,7 +88,7 @@ else:
         st.success("## 🏆 MISIÓN CUMPLIDA")
         st.write("¡Has salvado la fábrica global!")
         st.write(f"Rango de Honor: **{logic.get_rank()}**")
-        st.markdown(f"<div style='font-size:2em; text-align:center; padding:20px; border:4px double #4CAF50; background:#161b22;'>🔑 CLAVE FINAL: {FINAL_KEYWORD}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:2em; text-align:center; padding:20px; border:4px double #4CAF50; background:#161b22; color: white;'>🔑 CLAVE FINAL: {FINAL_KEYWORD}</div>", unsafe_allow_html=True)
         if st.button("Nueva Partida"):
             st.session_state.game_logic = GameLogic(platform="streamlit")
             st.session_state.game_started = False
@@ -105,8 +100,8 @@ else:
         st.subheader(puzzle['title'])
         st.markdown(f"<p class='story-text'>{puzzle['story']}</p>", unsafe_allow_html=True)
         
-        st.markdown(f"**🔍 Análisis de Situación:** {puzzle['clue']}")
-        st.markdown(f"**🎯 Requerimiento:** {puzzle['task']}")
+        st.markdown(f"<p style='color: white;'><b>🔍 Análisis de Situación:</b> {puzzle['clue']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: white;'><b>🎯 Requerimiento:</b> {puzzle['task']}</p>", unsafe_allow_html=True)
         
         if not logic.show_fact:
             if puzzle['type'] == 'choice':
