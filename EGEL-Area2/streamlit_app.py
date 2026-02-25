@@ -5,8 +5,9 @@ import os
 # Page Config - WIDE LAYOUT for laptops/tablets
 st.set_page_config(page_title="Mega-Factory Escape", page_icon="🏭", layout="wide")
 
-# Artifact path for images
-IMG_BASE_PATH = "images"
+# Base path for images (calculated relative to this script for portability)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+IMG_BASE_PATH = os.path.join(SCRIPT_DIR, "images")
 
 # Dark Theme CSS (Optimized for density & no scrolling)
 st.markdown("""
