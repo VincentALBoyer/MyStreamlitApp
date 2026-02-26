@@ -1,8 +1,9 @@
 import streamlit as st
 import time
 import pandas as pd
+import math
 from instances import KNAPSACK_INSTANCES, PMEDIAN_INSTANCES
-from solver_utils import calculate_knapsack_stats, calculate_p_median_stats
+from solver_utils import calculate_knapsack_stats, calculate_p_median_stats, calculate_potential_total_distances
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -188,45 +189,7 @@ elif st.session_state.phase == "game":
         cities = instance["cities"]
         p = instance["p"]
         stats = calculate_p_median_stats(st.session_state.current_selection, cities)
-        
-        # Prepare data for display
-        df_cities = pd.DataFrame(cities)
-        df_cities["Selected"] = [city["id"] in st.session_state.current_selection for city in cities]
-        if st.session_state.mode == "easy":
-            df_cities["Cost (Dist to Nearest)"] = [stats["nearest_distances"].get(c["id"], 0) for c in cities]
-            df_cities["Cost (Dist to Nearest)"] = df_cities["Cost (Dist to Nearest)"].round(1)
-        
-        cols_to_show = ["Selected", "id", "x", "y"]
-        if st.session_state.mode == "easy":
-            cols_to_show.append("Cost (Dist to Nearest)")
-        df_cities = df_cities[cols_to_show]
-
-        st.markdown(f"#### Select {p} Facilities (Click headers to sort)")
-
-        # Data Editor for selection
-        edited_df = st.data_editor(
-            df_cities,
-            column_config={
-                "Selected": st.column_config.CheckboxColumn(
-                    "Select",
-                    help="Mark city as facility",
-                    default=False,
-                ),
-                "id": st.column_config.NumberColumn("ID", disabled=True),
-                "x": st.column_config.NumberColumn("X Coord", disabled=True),
-                "y": st.column_config.NumberColumn("Y Coord", disabled=True),
-                "Cost (Dist to Nearest)": st.column_config.NumberColumn("Assignment Cost", disabled=True),
-            },
-            disabled=["id", "x", "y", "Cost (Dist to Nearest)"],
-            hide_index=True,
-            key="pmedian_editor"
-        )
-
-        # Update selection state
-        new_selection = set(edited_df[edited_df["Selected"]]["id"])
-        if new_selection != st.session_state.current_selection:
-            st.session_state.current_selection = new_selection
-            st.rerun()
+        potential_stats = calculate_potential_total_distances(st.session_state.current_selection, cities)
         
         # Dashboard stats
         c1, c2, c3 = st.columns(3)
@@ -241,6 +204,59 @@ elif st.session_state.phase == "game":
             st.error(f"⚠️ Too many facilities! You must select EXACTLY {p}.")
         elif len(st.session_state.current_selection) < p:
             st.info(f"ℹ️ Select {p - len(st.session_state.current_selection)} more facilities.")
+
+        st.markdown(f"#### Distance Matrix & Selection (Select {p} Facilities)")
+
+        # Create Distance Matrix DataFrame
+        # Rows: Potential Facilities (All cities)
+        # Columns: Customers (All cities)
+        matrix_data = []
+        for fac_city in cities:
+            row = {
+                "Selected": fac_city["id"] in st.session_state.current_selection,
+                "Facility ID": fac_city["id"],
+            }
+            # Calculate distance to every other city
+            for cust_city in cities:
+                dist = math.ceil(math.sqrt((fac_city["x"] - cust_city["x"])**2 + (fac_city["y"] - cust_city["y"])**2))
+                
+                # Mark assignment if this cust_city is assigned to this fac_city
+                is_assigned = stats["assignments"].get(cust_city["id"]) == fac_city["id"]
+                val_str = f"{dist}"
+                if is_assigned:
+                    val_str += " [A]"
+                
+                row[f"C{cust_city['id']}"] = val_str
+            
+            # Add Potential Cost column
+            row["Potential Total Dist"] = round(potential_stats.get(fac_city["id"], 0), 1)
+            matrix_data.append(row)
+
+        df_matrix = pd.DataFrame(matrix_data)
+
+        # Configure columns for st.data_editor
+        col_config = {
+            "Selected": st.column_config.CheckboxColumn("Select", help="Pick as facility", default=False),
+            "Facility ID": st.column_config.NumberColumn("ID", disabled=True),
+            "Potential Total Dist": st.column_config.NumberColumn("Potential Cost", disabled=True, help="Total distance if this is a facility"),
+        }
+        # Customer columns are disabled
+        for cust_city in cities:
+            col_config[f"C{cust_city['id']}"] = st.column_config.TextColumn(f"C{cust_city['id']}", disabled=True)
+
+        edited_df = st.data_editor(
+            df_matrix,
+            column_config=col_config,
+            disabled=[col for col in df_matrix.columns if col != "Selected"],
+            hide_index=True,
+            key="pmedian_matrix_editor"
+        )
+
+        # Update selection state
+        new_selection = set(edited_df[edited_df["Selected"]]["Facility ID"])
+        if new_selection != st.session_state.current_selection:
+            st.session_state.current_selection = new_selection
+            st.rerun()
 
         st.write("---")
         if st.button("NEXT INSTANCE", type="primary", disabled=not is_feasible):
