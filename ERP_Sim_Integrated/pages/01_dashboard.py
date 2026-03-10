@@ -1,0 +1,138 @@
+# =============================================================================
+# Page 01 — Executive Dashboard
+# =============================================================================
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from engine.erp_engine import get_kpis, get_income_statement
+
+state = st.session_state.sim_state
+kpis = get_kpis(state)
+inc = get_income_statement(state)
+
+st.markdown("""
+<div class='page-header'>
+    <h2>📊 Executive Dashboard</h2>
+    <p>Real-time business performance overview</p>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Module status banner ──────────────────────────────────────────────────────
+m1, m2, m3 = st.columns(3)
+with m1:
+    st.markdown("<span class='badge-erp'>ERP</span> **Core Active** — Inventory, Production, Finance", unsafe_allow_html=True)
+with m2:
+    if state.srm_enabled:
+        st.markdown("<span class='badge-srm'>SRM</span> **Supplier Portal Active**", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge-off'>SRM</span> *Disabled — Manual procurement*", unsafe_allow_html=True)
+with m3:
+    if state.crm_enabled:
+        st.markdown("<span class='badge-crm'>CRM</span> **Customer Pipeline Active**", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge-off'>CRM</span> *Disabled — Manual sales order entry*", unsafe_allow_html=True)
+
+st.divider()
+
+# ── KPI Row 1: Financial ──────────────────────────────────────────────────────
+st.markdown("<div class='section-title'>💰 Financial KPIs</div>", unsafe_allow_html=True)
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("Cash", f"${kpis['cash']:,.0f}")
+k2.metric("Revenue", f"${kpis['revenue']:,.0f}")
+k3.metric("Net Income", f"${kpis['net_income']:,.0f}",
+          delta=f"{inc['net_margin_pct']:.1f}% margin" if kpis['revenue'] > 0 else None)
+k4.metric("Total Penalties", f"${kpis['total_penalties']:,.0f}",
+          delta="Lost sales" if kpis['total_penalties'] > 0 else None,
+          delta_color="inverse")
+k5.metric("Rework Cost", f"${kpis['total_rework']:,.0f}",
+          delta="Quality issues" if kpis['total_rework'] > 0 else None,
+          delta_color="inverse")
+
+# ── KPI Row 2: Operations ─────────────────────────────────────────────────────
+st.markdown("<div class='section-title'>🏗️ Operational KPIs</div>", unsafe_allow_html=True)
+op1, op2, op3, op4, op5 = st.columns(5)
+op1.metric("Open Orders", kpis["open_orders"])
+op2.metric("Shipped", kpis["shipped_orders"])
+op3.metric("OTIF %", f"{kpis['otif_pct']:.1f}%",
+           delta="On-Time In-Full" if kpis["shipped_orders"] > 0 else None)
+op4.metric("WIP Jobs", kpis["wip_count"])
+op5.metric("Inventory (Raw)", f"${kpis['inventory_value_raw']:,.0f}")
+
+st.divider()
+
+# ── Charts ────────────────────────────────────────────────────────────────────
+c_chart, c_log = st.columns([3, 2])
+
+with c_chart:
+    st.markdown("<div class='section-title'>📈 Performance Trend</div>", unsafe_allow_html=True)
+    if len(state.daily_snapshots) >= 2:
+        df = pd.DataFrame(state.daily_snapshots)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["day"], y=df["revenue"], name="Revenue",
+                                  line=dict(color="#1A56DB", width=2.5)))
+        fig.add_trace(go.Scatter(x=df["day"], y=df["costs"], name="Costs",
+                                  line=dict(color="#EF4444", width=2, dash="dash")))
+        fig.add_trace(go.Scatter(x=df["day"], y=df["profit"], name="Net Profit",
+                                  fill="tozeroy", line=dict(color="#10B981", width=2),
+                                  fillcolor="rgba(16,185,129,0.1)"))
+        fig.update_layout(
+            height=300, paper_bgcolor="white", plot_bgcolor="white",
+            margin=dict(l=10, r=10, t=20, b=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(title="Day", gridcolor="#F1F5F9"),
+            yaxis=dict(title="$", gridcolor="#F1F5F9"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Advance a few days to see performance trend charts.")
+
+with c_log:
+    st.markdown("<div class='section-title'>📢 Today's Activity Feed</div>", unsafe_allow_html=True)
+    with st.container(height=310):
+        if state.daily_events:
+            for ev in reversed(state.daily_events):
+                if "⚠️" in ev or "❌" in ev or "🚫" in ev:
+                    cls = "alert-red"
+                elif "✅" in ev or "🚚" in ev or "🏆" in ev:
+                    cls = "alert-green"
+                elif "💸" in ev or "📋" in ev or "🔧" in ev:
+                    cls = "alert-blue"
+                else:
+                    cls = "alert-amber"
+                st.markdown(f"<div class='{cls}'>{ev}</div>", unsafe_allow_html=True)
+        else:
+            st.caption("Advance a day to see activity here.")
+
+st.divider()
+
+# ── Inventory Overview ────────────────────────────────────────────────────────
+st.markdown("<div class='section-title'>📦 Inventory Snapshot</div>", unsafe_allow_html=True)
+c_raw, c_fg = st.columns(2)
+
+with c_raw:
+    st.caption("🧱 **Raw Materials**")
+    raw_rows = []
+    for mid, mat in state.materials.items():
+        qty = state.stock_materials.get(mid, 0)
+        status = "🔴 LOW" if qty <= mat.reorder_point else ("🟡 OK" if qty <= mat.reorder_point * 2 else "🟢 Good")
+        raw_rows.append({
+            "Material": mat.name, "Qty": qty, "Unit": mat.unit,
+            "Reorder Pt": mat.reorder_point, "Status": status,
+            "Value": f"${qty * mat.cost:.0f}"
+        })
+    st.dataframe(pd.DataFrame(raw_rows), use_container_width=True, hide_index=True)
+
+with c_fg:
+    st.caption("🚲 **Finished Goods**")
+    fg_rows = []
+    for pid, prod in state.products.items():
+        qty = state.stock_finished.get(pid, 0)
+        open_demand = sum(so.qty for so in state.sales_orders
+                          if so.product_id == pid and so.status == "Open")
+        coverage = "✅ Covered" if qty >= open_demand else f"⚠️ Short by {open_demand - qty}"
+        fg_rows.append({
+            "Product": prod.name, "In Stock": qty,
+            "Open Demand": open_demand, "Coverage": coverage,
+            "Value": f"${qty * prod.price:.0f}"
+        })
+    st.dataframe(pd.DataFrame(fg_rows), use_container_width=True, hide_index=True)
