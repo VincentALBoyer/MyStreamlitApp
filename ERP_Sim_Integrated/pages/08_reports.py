@@ -7,19 +7,23 @@ import plotly.express as px
 import plotly.graph_objects as go
 from engine.erp_engine import export_activity_log, export_kpi_summary, get_kpis, get_income_statement
 
+if "sim_state" not in st.session_state:
+    st.warning("Simulation state not initialized. Please go to the Home page first.")
+    st.stop()
+
 state = st.session_state.sim_state
 kpis = get_kpis(state)
 inc = get_income_statement(state)
 
-st.markdown("""
+st.html("""
 <div class='page-header'>
     <h2>📑 Reports & KPI Analysis</h2>
     <p>Download activity logs and KPI summaries for your analysis assignments</p>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 # ── Download Zone ─────────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>📥 Data Exports</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>📥 Data Exports</div>")
 d1, d2, d3 = st.columns(3)
 
 with d1:
@@ -80,7 +84,7 @@ with d3:
 st.divider()
 
 # ── Live KPI Dashboard ────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>📈 Live KPI Dashboard</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>📈 Live KPI Dashboard</div>")
 
 tab_erp, tab_srm, tab_crm = st.tabs(["🏭 ERP KPIs", "🔗 SRM KPIs", "📊 CRM KPIs"])
 
@@ -207,7 +211,7 @@ with tab_crm:
 st.divider()
 
 # ── Class Activity Summary ─────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>🎓 Simulation Summary</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>🎓 Simulation Summary</div>")
 summary_data = {
     "Simulation Day": state.current_day,
     "ERP Enabled": "✅ Always",

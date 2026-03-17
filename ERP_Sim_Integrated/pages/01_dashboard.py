@@ -6,16 +6,20 @@ import pandas as pd
 import plotly.graph_objects as go
 from engine.erp_engine import get_kpis, get_income_statement
 
+if "sim_state" not in st.session_state:
+    st.warning("Simulation state not initialized. Please go to the Home page first.")
+    st.stop()
+
 state = st.session_state.sim_state
 kpis = get_kpis(state)
 inc = get_income_statement(state)
 
-st.markdown("""
+st.html("""
 <div class='page-header'>
     <h2>📊 Executive Dashboard</h2>
     <p>Real-time business performance overview</p>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 # ── Module status banner ──────────────────────────────────────────────────────
 m1, m2, m3 = st.columns(3)
@@ -35,7 +39,7 @@ with m3:
 st.divider()
 
 # ── KPI Row 1: Financial ──────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>💰 Financial KPIs</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>💰 Financial KPIs</div>")
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Cash", f"${kpis['cash']:,.0f}")
 k2.metric("Revenue", f"${kpis['revenue']:,.0f}")
@@ -49,7 +53,7 @@ k5.metric("Rework Cost", f"${kpis['total_rework']:,.0f}",
           delta_color="inverse")
 
 # ── KPI Row 2: Operations ─────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>🏗️ Operational KPIs</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>🏗️ Operational KPIs</div>")
 op1, op2, op3, op4, op5 = st.columns(5)
 op1.metric("Open Orders", kpis["open_orders"])
 op2.metric("Shipped", kpis["shipped_orders"])
@@ -64,7 +68,7 @@ st.divider()
 c_chart, c_log = st.columns([3, 2])
 
 with c_chart:
-    st.markdown("<div class='section-title'>📈 Performance Trend</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>📈 Performance Trend</div>")
     if len(state.daily_snapshots) >= 2:
         df = pd.DataFrame(state.daily_snapshots)
         fig = go.Figure()
@@ -87,7 +91,7 @@ with c_chart:
         st.info("Advance a few days to see performance trend charts.")
 
 with c_log:
-    st.markdown("<div class='section-title'>📢 Today's Activity Feed</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>📢 Today's Activity Feed</div>")
     with st.container(height=310):
         if state.daily_events:
             for ev in reversed(state.daily_events):
@@ -99,14 +103,14 @@ with c_log:
                     cls = "alert-blue"
                 else:
                     cls = "alert-amber"
-                st.markdown(f"<div class='{cls}'>{ev}</div>", unsafe_allow_html=True)
+                st.html(f"<div class='{cls}'>{ev}</div>")
         else:
             st.caption("Advance a day to see activity here.")
 
 st.divider()
 
 # ── Inventory Overview ────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>📦 Inventory Snapshot</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>📦 Inventory Snapshot</div>")
 c_raw, c_fg = st.columns(2)
 
 with c_raw:

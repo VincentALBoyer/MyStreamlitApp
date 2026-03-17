@@ -181,12 +181,67 @@ def award_rfq(state: SimState, rfq_id: str, supplier_id: str) -> Tuple[bool, str
     rfq.status = "Awarded"
     rfq.awarded_supplier_id = supplier_id
 
+    # Create Invoice immediately upon PO creation (with 2 day validity as requested)
+    create_invoice_for_po(state, po, validity_days=2)
+
     state.daily_events.append(
         f"✅ PO {po.id} created via RFQ {rfq.id}: {qty}x {mat.name} from {sup.name} @ ${price:.2f} (Arrival: Day {arrival_day})"
     )
     _log_srm(state, "RFQ_Awarded", rfq.id, "Student",
              f"Awarded to {sup.name}: {qty}x {mat.name} @ ${price:.2f}",
              financial_impact=-cost, kpi_tag="srm_rfq")
+    return True, po.id
+def reject_rfq(state: SimState, rfq_id: str) -> Tuple[bool, str]:
+    """Student rejects the RFQ responses."""
+    rfq = next((r for r in state.rfqs if r.id == rfq_id), None)
+    if not rfq:
+        return False, "RFQ not found"
+    if rfq.status != "QuotesReceived":
+        return False, f"RFQ already in status: {rfq.status}"
+    
+    rfq.status = "Rejected"
+    state.daily_events.append(f"❌ RFQ {rfq.id} quotes rejected by user.")
+    return True, "RFQ quotes rejected"
+
+def purchase_from_market(state: SimState, supplier_id: str, material_id: str, qty: int) -> Tuple[bool, str]:
+    """Direct purchase from SRM daily market (no RFQ needed)."""
+    sup = state.suppliers.get(supplier_id)
+    if not sup: return False, "Supplier not found"
+    
+    mat = state.materials.get(material_id)
+    if not mat: return False, "Material not found"
+    
+    price = sup.contract_price.get(material_id) if sup.contract_price and material_id in sup.contract_price else sup.current_price.get(material_id, mat.cost)
+    cost = price * qty
+    
+    if state.cash < cost:
+        return False, f"Insufficient cash: need ${cost:,.0f}"
+    
+    # Create PO
+    state.cash -= cost
+    state.total_purchase_spend += cost
+    sup.total_spend += cost
+    
+    arrival_day = state.current_day + sup.lead_time_days
+    po = PurchaseOrder(
+        id=state.next_po_id(),
+        supplier_id=supplier_id,
+        material_id=material_id,
+        qty=qty,
+        unit_cost=price,
+        day_placed=state.current_day,
+        lead_time=sup.lead_time_days,
+        expected_arrival_day=arrival_day,
+        is_contracted=bool(sup.contract_price and material_id in sup.contract_price),
+        po_source="market_direct",
+    )
+    state.purchase_orders.append(po)
+    
+    # Create Invoice
+    create_invoice_for_po(state, po, validity_days=2)
+    
+    state.daily_events.append(f"🛒 Direct Purchase: {qty}x {mat.name} from {sup.name} @ ${price:.2f}")
+    _log_srm(state, "Market_Purchase", po.id, "Student", f"Direct purchase: {qty}x {mat.name} from {sup.name}")
     return True, po.id
 
 
@@ -227,11 +282,15 @@ def create_contract(state: SimState, supplier_id: str, material_id: str,
 # INVOICE & AP MANAGEMENT
 # =============================================================================
 
-def create_invoice_for_po(state: SimState, po: PurchaseOrder) -> None:
-    """Create AP invoice when goods are received (3-way match trigger)."""
+def create_invoice_for_po(state: SimState, po: PurchaseOrder, validity_days: int = None) -> None:
+    """Create AP invoice (now done at PO creation with specific validity)."""
     sup = state.suppliers.get(po.supplier_id)
-    amount = po.qty_received * po.unit_cost
-    due_day = state.current_day + FINANCIAL_PARAMS["ap_payment_days"]
+    amount = po.qty * po.unit_cost
+    
+    if validity_days is None:
+        validity_days = FINANCIAL_PARAMS["ap_payment_days"]
+        
+    due_day = state.current_day + validity_days
 
     # Early payment discount (pay within 10 days → 2% off)
     early_discount = amount * 0.02

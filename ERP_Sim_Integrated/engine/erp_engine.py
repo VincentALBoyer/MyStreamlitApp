@@ -7,7 +7,8 @@ import math
 from typing import Tuple, List, Optional
 from engine.state import (
     SimState, Material, Product, SalesOrder, WorkOrder, PurchaseOrder,
-    FinancialEntry, InventoryMovement, ActivityLog, EmailMessage, Supplier
+    FinancialEntry, InventoryMovement, ActivityLog, EmailMessage, Supplier,
+    CommunicationEntry, PendingRFQ, RFQ
 )
 from config import (
     MATERIALS_CONFIG, PRODUCTS_CONFIG, SUPPLIERS_CONFIG, CUSTOMERS_CONFIG,
@@ -61,11 +62,9 @@ def init_simulation() -> SimState:
                           mvt_type="Opening_Stock", qty=qty,
                           ref_id="INIT", desc=f"Opening stock: {state.materials[mid].name}")
 
-    # Generate first day's customer demand
+    # Generate first daily demand and market intro
     _generate_daily_demand(state)
-
-    # Generate first inbox messages (manual mode framing)
-    _generate_supplier_market_update_email(state)
+    _generate_initial_comms(state)
 
     _log_activity(state, "System", "Simulation_Start", "INIT", "System",
                   f"VéloForge Industries — Day 1 simulation started. Cash: ${state.cash:,.0f}")
@@ -100,19 +99,22 @@ def advance_day(state: SimState) -> None:
         from engine.srm_engine import check_invoice_overdue
         check_invoice_overdue(state)
 
-    # 7. CRM daily pipeline advance
+    # 8. CRM daily pipeline advance
     if state.crm_enabled:
         from engine.crm_engine import advance_crm_pipeline, generate_new_leads
         advance_crm_pipeline(state)
         generate_new_leads(state)
 
-    # 8. Generate new daily demand
+    # 9. Process pending manual RFQs (delayed replies arrive today)
+    _process_pending_rfqs(state)
+
+    # 10. Generate new daily demand
     _generate_daily_demand(state)
 
-    # 9. MRP alerts — low stock warnings
+    # 11. MRP alerts — low stock warnings
     _run_mrp_alerts(state)
 
-    # 10. Daily snapshot for charts
+    # 12. Daily snapshot for charts
     _save_daily_snapshot(state)
 
     # 11. Advance day
@@ -182,8 +184,7 @@ def _receive_purchase_orders(state: SimState) -> None:
 
             # Create invoice if SRM enabled (3-way match)
             if state.srm_enabled:
-                from engine.srm_engine import create_invoice_for_po
-                create_invoice_for_po(state, po)
+                pass
 
 
 def _run_production(state: SimState) -> None:
@@ -288,70 +289,167 @@ def _generate_daily_demand(state: SimState) -> None:
             cname = random.choice(customer_names)
             cid = None
 
-        so = SalesOrder(
-            id=state.next_so_id(),
-            day_placed=state.current_day,
-            customer_name=cname,
-            customer_id=cid,
-            product_id=prod_id,
-            qty=qty,
-            unit_price=prod.price,
-            due_day=state.current_day + due_offset,
-            source="system_generated",
-        )
-        state.sales_orders.append(so)
+        due_day = state.current_day + due_offset
 
-        urgency = "🔴 RUSH" if is_rush else "📋 Standard"
-        state.daily_events.append(
-            f"🆕 {urgency} Order {so.id}: {cname} — {qty}x {prod.name} (Due Day {so.due_day})"
-        )
-
-        # In manual mode (no CRM), also generate inbox email
-        if not state.crm_enabled:
-            email = EmailMessage(
-                id=state.next_email_id(),
-                day_received=state.current_day,
-                sender=f"{cname} <orders@{cname.lower().replace(' ', '')}.com>",
-                subject=f"{'URGENT: ' if is_rush else ''}Purchase Request — {qty}x {prod.name}",
-                body=(
-                    f"Dear {SUPPLIERS_CONFIG.get('S01', {}).get('description', 'VéloForge')} sales team,\n\n"
-                    f"We would like to place an order for **{qty} units** of your **{prod.name}** bicycle.\n"
-                    f"Requested delivery by: Day {so.due_day}\n"
-                    f"Please confirm availability and pricing.\n\n"
-                    f"Best regards,\n{cname} Purchasing Team"
-                ),
-                category="customer_order",
-                action_data={"so_id": so.id},
+        if state.crm_enabled:
+            # CRM: Automatic conversion to Sales Order
+            so_id = state.next_so_id()
+            so = SalesOrder(
+                id=so_id, customer_name=cname, customer_id=cid, product_id=prod_id, qty=qty,
+                unit_price=prod.price, unit_cost=prod.cost,
+                day_placed=state.current_day, due_day=due_day,
+                status="Open", source="CRM_Pipeline"
             )
-            state.inbox.append(email)
+            state.sales_orders.append(so)
+            state.daily_events.append(f"📈 CRM Lead converted: {cname} — {qty}x {prod.name}")
+        else:
+            # Manual Mode: Just a communication entry. Student must accept it.
+            comm = CommunicationEntry(
+                id=state.next_email_id(),
+                day=state.current_day,
+                module="Sales",
+                entity_id="C01", # generic
+                entity_name=cname,
+                direction="Inbound",
+                subject=f"Order Inquiry — {qty}x {prod.name}",
+                body=(
+                    f"Hello Sales,\n\nWe are interested in purchasing {qty} units of {prod.name}. "
+                    f"Can you deliver by Day {due_day}? Please confirm to process the order.\n\nBest, {cname}"
+                ),
+                action_type="customer_order",
+                action_data={
+                    "customer_name": cname,
+                    "customer_id": cid,
+                    "product_id": prod_id,
+                    "qty": qty,
+                    "due_day": due_day,
+                    "price": prod.price
+                },
+            )
+            state.communication_log.append(comm)
+            state.daily_events.append(f"📧 New Order Inquiry from {cname} for {prod.name}")
 
 
-def _generate_supplier_market_update_email(state: SimState) -> None:
-    """Day 1 email: market pricing update from suppliers (manual mode)."""
+def process_customer_order_manual(state: SimState, comm_id: str) -> Tuple[bool, str]:
+    """Student accepts a customer inquiry from the log and converts it to a Sales Order."""
+    comm = next((c for c in state.communication_log if c.id == comm_id), None)
+    if not comm or comm.action_type != "customer_order":
+        return False, "Order inquiry not found or already processed."
+    
+    data = comm.action_data
+    so_id = state.next_so_id()
+    so = SalesOrder(
+        id=so_id,
+        customer_name=data["customer_name"],
+        product_id=data["product_id"],
+        qty=data["qty"],
+        unit_price=data["price"], # Use price from action_data
+        day_placed=state.current_day,
+        due_day=data["due_day"],
+        status="Open",
+        source="Manual_Accept"
+    )
+    state.sales_orders.append(so)
+    
+    # Mark communication as processed
+    comm.action_type = "processed"
+    comm.is_read = True # Mark as read
+    comm.subject = f"[PROCESSED] {comm.subject}"
+    
+    _log_activity(state, "ERP", "Sales_Order_Manual", so_id, "Student", f"Accepted manual order from {data['customer_name']}")
+    state.daily_events.append(f"✅ Accepted order inquiry {comm_id} for {data['qty']}x {state.products[data['product_id']].name} (SO {so_id})")
+    return True, so_id
+
+
+def _generate_initial_comms(state: SimState) -> None:
+    """Initial communication for day 1 (manual mode)."""
     for sid, sup in state.suppliers.items():
-        for mid in sup.materials:
-            mat = state.materials.get(mid)
-            if not mat:
-                continue
-            email = EmailMessage(
-                id=state.next_email_id(),
-                day_received=state.current_day,
-                sender=f"{sup.name} <sales@{sup.name.lower().replace(' ', '')}.com>",
-                subject=f"Current Pricing & Lead Times — {mat.name}",
-                body=(
-                    f"Dear VéloForge Procurement Team,\n\n"
-                    f"Our current pricing and lead times for your reference:\n\n"
-                    f"• **{mat.name}**: ${sup.current_price.get(mid, mat.cost):.2f}/{mat.unit}\n"
-                    f"• Minimum order quantity: {sup.min_order_qty} units\n"
-                    f"• Estimated lead time: {sup.lead_time_days} business days\n"
-                    f"• Payment terms: Net 30\n\n"
-                    f"To place an order, please send us a Purchase Order by email or fax.\n\n"
-                    f"Best regards,\n{sup.name} Sales Team"
-                ),
-                category="rfq_response",
-                action_data={"supplier_id": sid, "material_id": mid},
-            )
-            state.inbox.append(email)
+        comm = CommunicationEntry(
+            id=state.next_email_id(),
+            day=state.current_day,
+            module="Procurement",
+            entity_id=sid,
+            entity_name=sup.name,
+            direction="Inbound",
+            subject=f"Standard Terms & Pricing: {sup.name}",
+            body=f"Welcome to Day 1. We supply {', '.join([state.materials[m].name for m in sup.materials])}. Please request a quote by email for any specific quantities.",
+            action_type="general",
+            is_read=True
+        )
+        state.communication_log.append(comm)
+
+
+def _process_pending_rfqs(state: SimState) -> None:
+    """Manual mode logic: process RFQs sent yesterday so they appear as replies today."""
+    remaining = []
+    for pr in state.pending_rfqs:
+        pr.days_to_reply -= 1
+        if pr.days_to_reply <= 0:
+            # Reply arrives today!
+            mat = state.materials.get(pr.material_id)
+            # Find eligible suppliers
+            best_sup = None
+            for sid, sup in state.suppliers.items():
+                if pr.material_id in sup.materials and not sup.is_blocked:
+                    # In manual mode, we just get ONE reply (the best one normally) or multiple?
+                    # Let's give them a single focused reply for simplicity in the log.
+                    price = sup.current_price.get(pr.material_id, mat.cost)
+                    comm = CommunicationEntry(
+                        id=state.next_email_id(),
+                        day=state.current_day,
+                        module="Procurement",
+                        entity_id=sid,
+                        entity_name=sup.name,
+                        direction="Inbound",
+                        subject=f"RE: Quote Request — {pr.qty}x {mat.name}",
+                        body=(
+                            f"Hello VéloForge team,\n\nFurther to your request, we can provide {pr.qty} units of {mat.name} "
+                            f"at a price of ${price:.2f} each. Estimated lead time is {sup.lead_time_days} days.\n\n"
+                            f"Please click 'Accept' to convert this to a Purchase Order."
+                        ),
+                        action_type="rfq_quote",
+                        action_data={
+                            "supplier_id": sid,
+                            "material_id": pr.material_id,
+                            "qty": pr.qty,
+                            "price": price,
+                            "lead_time": sup.lead_time_days
+                        },
+                    )
+                    state.communication_log.append(comm)
+                    state.daily_events.append(f"📧 New Quote received from {sup.name} for {mat.name}")
+        else:
+            remaining.append(pr)
+    state.pending_rfqs = remaining
+
+
+def request_quote_manual(state: SimState, material_id: str, qty: int) -> Tuple[bool, str]:
+    """Student requests a quote in manual mode. Reply arrives next day."""
+    if state.srm_enabled:
+        return False, "SRM is active. Use the Daily Market for instant ordering."
+    
+    mat = state.materials.get(material_id)
+    if not mat: return False, "Material not found"
+    
+    rfq_id = state.next_rfq_id()
+    pending = PendingRFQ(id=rfq_id, day_sent=state.current_day, material_id=material_id, qty=qty)
+    state.pending_rfqs.append(pending)
+    
+    # Add outbound log
+    comm = CommunicationEntry(
+        id=state.next_email_id(),
+        day=state.current_day,
+        module="Procurement",
+        entity_id="ALL",
+        entity_name="Global Suppliers",
+        direction="Outbound",
+        subject=f"Quote Request: {qty}x {mat.name}",
+        body=f"To all suppliers: Please provide your best quote for {qty} units of {mat.name}.",
+        is_read=True
+    )
+    state.communication_log.append(comm)
+    _log_activity(state, "ERP", "RFQ_Sent_Manual", rfq_id, "Student", f"Requested quote for {qty}x {mat.name}")
+    return True, f"Request sent. Check the Communication Log Day {state.current_day + 1} for replies."
 
 
 def _run_mrp_alerts(state: SimState) -> None:

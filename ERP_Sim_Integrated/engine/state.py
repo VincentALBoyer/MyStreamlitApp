@@ -160,7 +160,7 @@ class SupplierInvoice:
 
 @dataclass
 class EmailMessage:
-    """Simulated inbox message for manual / ERP-only mode"""
+    """Legacy simulated inbox message (still used for some system alerts)"""
     id: str
     day_received: int
     sender: str
@@ -168,7 +168,31 @@ class EmailMessage:
     body: str
     category: str = "general"       # rfq_response | customer_order | alert | system
     is_read: bool = False
-    action_data: Optional[dict] = None   # structured data for action buttons
+    action_data: Optional[dict] = None
+
+@dataclass
+class CommunicationEntry:
+    """Localized communication log entry for Procurement/Sales pages"""
+    id: str
+    day: int
+    module: str             # Procurement | Sales
+    entity_id: str          # Supplier ID or Customer ID
+    entity_name: str
+    direction: str          # Inbound | Outbound
+    subject: str
+    body: str
+    action_type: Optional[str] = None  # rfq_quote | customer_order
+    action_data: Optional[dict] = None
+    is_read: bool = False
+
+@dataclass
+class PendingRFQ:
+    """RFQ that is being processed for next-day reply in manual mode"""
+    id: str
+    day_sent: int
+    material_id: str
+    qty: int
+    days_to_reply: int = 1
 
 
 # =============================================================================
@@ -278,14 +302,16 @@ class SimState:
 
     # SRM
     rfqs: List[RFQ] = field(default_factory=list)
+    pending_rfqs: List[PendingRFQ] = field(default_factory=list)
     supplier_invoices: List[SupplierInvoice] = field(default_factory=list)
 
     # CRM
     leads: List[Lead] = field(default_factory=list)
     service_tickets: List[ServiceTicket] = field(default_factory=list)
 
-    # Inbox (manual mode simulation)
+    # Communications (Localized Logs)
     inbox: List[EmailMessage] = field(default_factory=list)
+    communication_log: List[CommunicationEntry] = field(default_factory=list)
 
     # Activity & financials
     activity_log: List[ActivityLog] = field(default_factory=list)

@@ -5,14 +5,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+if "sim_state" not in st.session_state:
+    st.warning("Simulation state not initialized. Please go to the Home page first.")
+    st.stop()
+
 state = st.session_state.sim_state
 
-st.markdown("""
+st.html("""
 <div class='page-header'>
     <h2>📦 Inventory & Warehouse</h2>
     <p>Real-time stock levels, material movements, ABC analysis, and reorder alerts</p>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 # ── KPIs ──────────────────────────────────────────────────────────────────────
 total_raw_val = sum(state.stock_materials.get(m, 0) * mat.cost for m, mat in state.materials.items())
@@ -67,7 +71,7 @@ with tab_raw:
                  })
 
     # ABC Treemap
-    st.markdown("<div class='section-title'>📊 ABC Stock Value Analysis</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>📊 ABC Stock Value Analysis</div>")
     abc_data = [{"Material": mat.name, "Value": state.stock_materials.get(mid, 0) * mat.cost,
                  "ABC": mat.category}
                 for mid, mat in state.materials.items()]

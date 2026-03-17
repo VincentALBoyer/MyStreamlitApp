@@ -19,7 +19,7 @@ st.set_page_config(
 # =============================================================================
 # GLOBAL CSS
 # =============================================================================
-st.markdown(f"""
+st.html(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -123,7 +123,7 @@ st.markdown(f"""
     /* Progress bar styling */
     .stProgress > div > div {{ background: linear-gradient(90deg, #1A56DB, #7E3AF2) !important; }}
 </style>
-""", unsafe_allow_html=True)
+""")
 
 
 # =============================================================================
@@ -140,24 +140,24 @@ state = st.session_state.sim_state
 # =============================================================================
 with st.sidebar:
     # Company header
-    st.markdown(f"""
+    st.html(f"""
     <div style='text-align:center; padding: 0.5rem 0 1rem 0;'>
         <div style='font-size:2rem;'>🏭</div>
         <div style='color:#F8FAFC; font-weight:800; font-size:1.1rem;'>{COMPANY_NAME}</div>
         <div style='color:#94A3B8; font-size:0.75rem;'>Enterprise Information System</div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     # Module status indicators
     srm_label = "🟢 SRM Active" if state.srm_enabled else "⚪ SRM Off"
     crm_label = "🟢 CRM Active" if state.crm_enabled else "⚪ CRM Off"
-    st.markdown(f"""
+    st.html(f"""
     <div style='display:flex; gap:6px; justify-content:center; margin-bottom:1rem;'>
         <span class='badge-erp'>ERP</span>
         <span class='badge-{"srm" if state.srm_enabled else "off"}'>SRM{"✓" if state.srm_enabled else ""}</span>
         <span class='badge-{"crm" if state.crm_enabled else "off"}'>CRM{"✓" if state.crm_enabled else ""}</span>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     st.divider()
 
@@ -190,8 +190,7 @@ with st.sidebar:
     # INSTRUCTOR SETTINGS (open, no password)
     # =========================================================================
     with st.expander("⚙️ Instructor Settings", expanded=False):
-        st.markdown("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>MODULE ACTIVATION</div>",
-                    unsafe_allow_html=True)
+        st.html("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>MODULE ACTIVATION</div>")
 
         col_srm, col_crm = st.columns(2)
 
@@ -221,8 +220,7 @@ with st.sidebar:
             st.rerun()
 
         st.divider()
-        st.markdown("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>QUICK ACTIONS</div>",
-                    unsafe_allow_html=True)
+        st.html("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>QUICK ACTIONS</div>")
         auto_days = st.number_input("Auto-advance N days", min_value=1, max_value=10, value=3)
         if st.button("⏩ Auto-Run", use_container_width=True):
             from engine.srm_engine import update_supplier_prices
@@ -240,8 +238,7 @@ with st.sidebar:
     if not state.crm_enabled or not state.srm_enabled:
         unread = len([m for m in state.inbox if not m.is_read])
         if unread > 0:
-            st.markdown(f"<div style='color:#F59E0B; font-weight:600; margin-top:8px;'>📬 {unread} unread messages</div>",
-                        unsafe_allow_html=True)
+            st.html(f"<div style='color:#F59E0B; font-weight:600; margin-top:8px;'>📬 {unread} unread messages</div>")
 
 
 # =============================================================================
@@ -254,7 +251,6 @@ pages = [
     st.Page("pages/04_procurement.py", title="🛒 Procurement", icon="🛒"),
     st.Page("pages/05_sales.py",       title="📈 Sales",       icon="📈"),
     st.Page("pages/06_finance.py",     title="💰 Finance",     icon="💰"),
-    st.Page("pages/07_inbox.py",       title="📬 Inbox",       icon="📬"),
     st.Page("pages/08_reports.py",     title="📑 Reports",     icon="📑"),
 ]
 

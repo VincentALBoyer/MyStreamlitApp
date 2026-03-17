@@ -6,14 +6,18 @@ import pandas as pd
 import plotly.graph_objects as go
 from engine.erp_engine import create_work_order
 
+if "sim_state" not in st.session_state:
+    st.warning("Simulation state not initialized. Please go to the Home page first.")
+    st.stop()
+
 state = st.session_state.sim_state
 
-st.markdown("""
+st.html("""
 <div class='page-header'>
     <h2>🏗️ Production Management</h2>
     <p>Factory floor — schedule production runs, monitor capacity & work-in-progress</p>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 # ── Capacity KPIs ─────────────────────────────────────────────────────────────
 from config import DAILY_CAPACITY_HOURS
@@ -32,7 +36,7 @@ c4.metric("FG in Stock", sum(state.stock_finished.values()))
 st.divider()
 
 # ── Schedule New Production ────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>🔨 Schedule New Production Run</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>🔨 Schedule New Production Run</div>")
 
 col_form, col_check = st.columns([1, 1])
 
@@ -81,7 +85,7 @@ if start_btn:
 st.divider()
 
 # ── Work In Progress ──────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>⚙️ Work In Progress</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>⚙️ Work In Progress</div>")
 
 if not active_wos:
     st.info("🏖️ Factory floor is idle — schedule production above.")
@@ -109,7 +113,7 @@ else:
 st.divider()
 
 # ── Completed Work Orders ──────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>✅ Completed (Last 10)</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>✅ Completed (Last 10)</div>")
 done_wos = [wo for wo in state.work_orders if wo.status == "Completed"]
 if done_wos:
     done_wos_sorted = sorted(done_wos, key=lambda x: x.completion_day, reverse=True)[:10]
@@ -130,7 +134,7 @@ st.divider()
 
 # ── MRP Suggestions ────────────────────────────────────────────────────────────
 from engine.erp_engine import run_mrp_suggestion
-st.markdown("<div class='section-title'>🤖 MRP — Replenishment Suggestions</div>", unsafe_allow_html=True)
+st.html("<div class='section-title'>🤖 MRP — Replenishment Suggestions</div>")
 suggestions = run_mrp_suggestion(state)
 if suggestions:
     for s in suggestions:
@@ -145,5 +149,4 @@ if suggestions:
             unsafe_allow_html=True
         )
 else:
-    st.markdown("<div class='alert-green'>✅ Inventory looks adequate for the next 7 days based on demand trends.</div>",
-                unsafe_allow_html=True)
+    st.html("<div class='alert-green'>✅ Inventory looks adequate for the next 7 days based on demand trends.</div>")

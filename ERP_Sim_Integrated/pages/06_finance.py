@@ -7,16 +7,20 @@ import plotly.graph_objects as go
 import plotly.express as px
 from engine.erp_engine import get_income_statement, get_kpis
 
+if "sim_state" not in st.session_state:
+    st.warning("Simulation state not initialized. Please go to the Home page first.")
+    st.stop()
+
 state = st.session_state.sim_state
 inc = get_income_statement(state)
 kpis = get_kpis(state)
 
-st.markdown("""
+st.html("""
 <div class='page-header'>
     <h2>💰 Finance & Accounting</h2>
     <p>Income statement, cash flow, AR/AP aging, and balance sheet snapshot</p>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 tab_pl, tab_cf, tab_arap, tab_ledger = st.tabs([
     "📊 P&L Statement", "💵 Cash Flow", "📋 AR/AP Aging", "🗂️ General Ledger"
@@ -24,7 +28,7 @@ tab_pl, tab_cf, tab_arap, tab_ledger = st.tabs([
 
 # ── P&L ───────────────────────────────────────────────────────────────────────
 with tab_pl:
-    st.markdown("<div class='section-title'>Income Statement (Cumulative)</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>Income Statement (Cumulative)</div>")
     c_pl, c_chart = st.columns([1, 2])
 
     with c_pl:
@@ -40,7 +44,7 @@ with tab_pl:
         pl_row("Cost of Goods Sold (COGS)", -inc["cogs"], indent=1)
         pl_row("Gross Profit", inc["gross_profit"], bold=True,
                color="#10B981" if inc["gross_profit"] >= 0 else "#EF4444")
-        st.markdown("<hr style='margin:4px 0;border-color:#E2E8F0;'>", unsafe_allow_html=True)
+        st.html("<hr style='margin:4px 0;border-color:#E2E8F0;'>")
         pl_row("Operating Expenses", 0, bold=True)
         pl_row("— Overhead (rent, wages)", -inc["overhead"], indent=2)
         pl_row("— Rework (quality issues)", -inc["rework_cost"], indent=2,
@@ -49,7 +53,7 @@ with tab_pl:
         if state.crm_enabled:
             pl_row("— Marketing Spend (CRM)", -inc["marketing_spend"], indent=2)
         pl_row("Total OpEx", -inc["total_opex"], indent=1, bold=True)
-        st.markdown("<hr style='margin:4px 0;border-color:#E2E8F0;'>", unsafe_allow_html=True)
+        st.html("<hr style='margin:4px 0;border-color:#E2E8F0;'>")
         pl_row("EBIT", inc["ebit"], bold=True,
                color="#10B981" if inc["ebit"] >= 0 else "#EF4444")
         pl_row("— Lost Sale Penalties", -inc["penalties"], indent=1,
@@ -82,7 +86,7 @@ with tab_pl:
 
 # ── Cash Flow ─────────────────────────────────────────────────────────────────
 with tab_cf:
-    st.markdown("<div class='section-title'>Cash Balance Trend</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>Cash Balance Trend</div>")
     if state.daily_snapshots:
         df_cf = pd.DataFrame(state.daily_snapshots)
         fig_cf = go.Figure()
@@ -114,7 +118,7 @@ with tab_arap:
     c_ar, c_ap = st.columns(2)
 
     with c_ar:
-        st.markdown("<div class='section-title'>Accounts Receivable (AR)</div>", unsafe_allow_html=True)
+        st.html("<div class='section-title'>Accounts Receivable (AR)</div>")
         shipped_unpaid = [so for so in state.sales_orders
                           if so.status == "Shipped" and so.shipped_day]
         from config import FINANCIAL_PARAMS
@@ -140,7 +144,7 @@ with tab_arap:
             st.caption("No receivables yet.")
 
     with c_ap:
-        st.markdown("<div class='section-title'>Accounts Payable (AP)</div>", unsafe_allow_html=True)
+        st.html("<div class='section-title'>Accounts Payable (AP)</div>")
         if state.srm_enabled:
             unpaid_inv = [i for i in state.supplier_invoices if i.status in ("Unpaid", "Overdue")]
             if unpaid_inv:
@@ -174,7 +178,7 @@ with tab_arap:
 
 # ── General Ledger ─────────────────────────────────────────────────────────────
 with tab_ledger:
-    st.markdown("<div class='section-title'>General Ledger — Last 50 Entries</div>", unsafe_allow_html=True)
+    st.html("<div class='section-title'>General Ledger — Last 50 Entries</div>")
     if state.financial_ledger:
         ledger_data = []
         balance = 0

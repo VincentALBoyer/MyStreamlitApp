@@ -47,6 +47,16 @@ if not st.session_state.game_started:
     st.markdown("### 🛑 Acceso Restringido: Nivel 0")
     st.info("La fábrica está en cierre de emergencia. Todos los ingenieros deben iniciar la misión simultáneamente.")
     
+    formulario_path = os.path.join(SCRIPT_DIR, "6.-Formulario-EGELD-IINDU-EAM-190922.pdf")
+    if os.path.exists(formulario_path):
+        with open(formulario_path, "rb") as pdf_file:
+            st.download_button(
+                label="📥 Descargar Formulario EGEL",
+                data=pdf_file,
+                file_name="Formulario_EGEL_IINDU.pdf",
+                mime="application/pdf"
+            )
+
     start_code = st.text_input("Ingrese el Código de Autorización General:", placeholder="Código de 3 letras...", key="start_input")
     
     if st.button("Iniciar Misión General", type="primary"):
@@ -81,6 +91,17 @@ else:
                     st.warning(f"Cargando visual de {puzzle['title']}...")
         
         st.info("💡 Usa el Formulario EGEL PLUS IINDU (Págs 24-30).")
+        
+        formulario_path = os.path.join(SCRIPT_DIR, "6.-Formulario-EGELD-IINDU-EAM-190922.pdf")
+        if os.path.exists(formulario_path):
+            with open(formulario_path, "rb") as pdf_file:
+                st.download_button(
+                    label="📥 Descargar Formulario EGEL",
+                    data=pdf_file,
+                    file_name="Formulario_EGEL_IINDU.pdf",
+                    mime="application/pdf",
+                    key="sidebar_dl_btn"
+                )
 
     # Main Stage
     if logic.completed:
