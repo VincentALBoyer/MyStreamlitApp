@@ -45,17 +45,19 @@ st.divider()
 if not state.srm_enabled:
     st.html(f"""
     <div class='alert-amber'>
-    <b>📭 Manual Procurement Mode (ERP Only)</b><br>
-    SRM is disabled. Ordering involves manual communication and delays.<br>
-    1. Compose a Quote Request below.<br>
-    2. Check the <b>💬 Communication Log</b> on Day {state.current_day + 1} for replies.<br>
-    3. Accept a quote to create a Purchase Order.
+    <b>📭 Siloed Operations (ERP Only)</b><br>
+    SRM is disabled. Ordering requires manual communication and lacks integrated supplier data.<br>
+    <ul>
+        <li><b>Step 1:</b> Compose a Quote Request email to suppliers.</li>
+        <li><b>Step 2:</b> Advance the day to wait for a reply.</li>
+        <li><b>Step 3:</b> Open the <b>Inbox</b> to accept the quote and manually create a PO.</li>
+    </ul>
     </div>
     """)
     st.markdown("")
 
     tab_manual_req, tab_manual_log, tab_manual_pos = st.tabs([
-        "📧 Send Quote Request", "💬 Communication Log", "📦 Open POs"
+        "📧 Step 1: Send Request", "📥 Step 3: Inbox", "📦 Open POs"
     ])
 
     with tab_manual_req:
@@ -84,7 +86,7 @@ if not state.srm_enabled:
                 st.caption(f"• Request for {pr.qty}x {mat.name} sent Day {pr.day_sent}. Expected reply: Day {pr.day_sent + 1}.")
 
     with tab_manual_log:
-        st.html("<div class='section-title'>💬 Procurement Communication Log</div>")
+        st.html("<div class='section-title'>📥 Procurement Inbox</div>")
         proc_comms = [c for c in state.communication_log if c.module == "Procurement"]
         if not proc_comms:
             st.info("No communications logged yet.")
@@ -141,8 +143,8 @@ else:
 
     # ── Daily Market Tab ───────────────────────────────────────────────────────
     with tab_market:
-        st.html("<div class='section-title'>📊 Real-Time Market & Direct Purchase</div>")
-        st.info(f"Live integrated supplier pricing for Day {state.current_day}. No emails or RFQs required.")
+        st.html("<div class='section-title'>📊 Real-Time Market (1-Click Buy)</div>")
+        st.info(f"Live integrated supplier pricing for Day {state.current_day}. Immediate ordering—no emails needed.")
         
         m_filter = st.selectbox("Filter Material", ["All"] + list(state.materials.keys()),
                                 format_func=lambda x: state.materials[x].name if x != "All" else "All Materials")

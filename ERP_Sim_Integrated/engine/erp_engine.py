@@ -76,7 +76,9 @@ def init_simulation() -> SimState:
 # =============================================================================
 
 def advance_day(state: SimState) -> None:
-    """Run end-of-day processing. Called when student clicks 'Next Day'."""
+    """Main simulation loop for end-of-day processing."""
+    if state.game_over:
+        return
     state.daily_events.clear()
 
     # 1. Apply daily overhead
@@ -118,7 +120,11 @@ def advance_day(state: SimState) -> None:
     _save_daily_snapshot(state)
 
     # 11. Advance day
-    state.current_day += 1
+    if state.current_day < state.max_days:
+        state.current_day += 1
+    else:
+        # We are at or past the limit (should be handled by game_over guard but stay safe)
+        state.game_over = True
     if state.current_day > state.max_days:
         state.game_over = True
         state.daily_events.append("🏁 Simulation complete. Download your activity log from Reports.")
@@ -296,7 +302,7 @@ def _generate_daily_demand(state: SimState) -> None:
             so_id = state.next_so_id()
             so = SalesOrder(
                 id=so_id, customer_name=cname, customer_id=cid, product_id=prod_id, qty=qty,
-                unit_price=prod.price, unit_cost=prod.cost,
+                unit_price=prod.price, 
                 day_placed=state.current_day, due_day=due_day,
                 status="Open", source="CRM_Pipeline"
             )
@@ -341,6 +347,7 @@ def process_customer_order_manual(state: SimState, comm_id: str) -> Tuple[bool, 
     so = SalesOrder(
         id=so_id,
         customer_name=data["customer_name"],
+        customer_id=data.get("customer_id"),
         product_id=data["product_id"],
         qty=data["qty"],
         unit_price=data["price"], # Use price from action_data
@@ -805,6 +812,73 @@ def export_kpi_summary(state: SimState) -> str:
         for k, v in crm.items():
             rows.append({"KPI": k, "Value": v, "Module": "CRM", "Category": "Sales"})
 
+    return pd.DataFrame(rows).to_csv(index=False)
+
+
+def evaluate_performance(state: SimState) -> dict:
+    inc = get_income_statement(state)
+    kpis = get_kpis(state)
+    
+    base_score = 40
+    profit_bonus = min(35, max(0, inc["net_income"] / 2000)) 
+    otif_bonus = (kpis["otif_pct"] / 100) * 15 
+    penalty_deduction = min(20, kpis["total_penalties"] / 500) 
+    
+    srm_bonus = 5 if state.srm_enabled else 0
+    crm_bonus = 5 if state.crm_enabled else 0
+    
+    total_score = max(0, min(100, base_score + profit_bonus + otif_bonus - penalty_deduction + srm_bonus + crm_bonus))
+    
+    grade = "A+" if total_score >= 95 else "A" if total_score >= 90 else "B" if total_score >= 80 else "C" if total_score >= 70 else "D"
+    
+    if total_score > 85:
+        summary = "Excellent operations management! Your integration of systems led to high profitability and customer satisfaction."
+    elif total_score > 70:
+        summary = "Good effort. Enhancing your use of SRM for better supplier pricing or CRM for automated sales could boost your profitability."
+    else:
+        summary = "Operations struggled. Review your stockout penalties and ensure you are utilizing module data to make timely decisions."
+
+    return {
+        "score": round(total_score, 1),
+        "grade": grade,
+        "profit_bonus": round(profit_bonus, 1),
+        "otif_bonus": round(otif_bonus, 1),
+        "module_bonus": srm_bonus + crm_bonus,
+        "penalties": round(-penalty_deduction, 1),
+        "summary": summary,
+    }
+
+
+def generate_simulated_log(scenario: str = "optimized") -> str:
+    """Generates a dummy activity log for students to practice past simulation analysis."""
+    import pandas as pd
+    import random
+    rows = []
+    cash = 50000
+    for day in range(1, 31):
+        if scenario == "optimized":
+            orders = random.randint(4, 7)
+            spend_mult = 0.8
+            rework_cost = random.choice([0, 0, 0, 500])
+        else:
+            orders = random.randint(1, 4)
+            spend_mult = 1.2
+            rework_cost = random.choice([0, 500, 1000])
+
+        for _ in range(orders):
+            rev = random.uniform(800, 2500)
+            rows.append({"Day": day, "Module": "ERP", "Event_Type": "SalesOrder_Shipped", "Actor": "Student", "Description": "Shipped Order", "Financial_Impact": rev, "KPI_Tag": "sales_revenue"})
+            cash += rev
+            
+        if day % 6 == 0:
+            spend = random.uniform(3000, 6000) * spend_mult
+            rows.append({"Day": day, "Module": "ERP", "Event_Type": "PO_Created", "Actor": "Student", "Description": "Purchased Materials", "Financial_Impact": -spend, "KPI_Tag": "procurement_spend"})
+            cash -= spend
+            
+        if rework_cost > 0:
+            rows.append({"Day": day, "Module": "Production", "Event_Type": "Quality_Issue", "Actor": "System", "Description": "Rework Required", "Financial_Impact": -rework_cost, "KPI_Tag": "production_quality"})
+            cash -= rework_cost
+            
     return pd.DataFrame(rows).to_csv(index=False)
 
 

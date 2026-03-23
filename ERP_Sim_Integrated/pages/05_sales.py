@@ -29,21 +29,23 @@ st.html("""
 if not state.crm_enabled:
     st.html("""
     <div class='alert-amber'>
-    <b>📭 Manual Sales Mode (ERP Only)</b><br>
-    CRM is disabled. Customer orders arrive as inquiries in the Communication Log.<br>
-    1. Check <b>💬 Communication Log</b> for new order inquiries.<br>
-    2. Click <b>Accept & Enter Order</b> to convert to an ERP Sales Order.<br>
-    3. Ship the order once finished goods are in stock.
+    <b>📭 Siloed Operations (ERP Only)</b><br>
+    CRM is disabled. Customer orders arrive as unstructured emails/calls and there is no automated lead conversion.<br>
+    <ul>
+        <li><b>Step 1:</b> Check the <b>Inbox</b> for new customer inquiries.</li>
+        <li><b>Step 2:</b> Click <b>Accept & Enter Order</b> to manually key the data into the ERP.</li>
+        <li><b>Step 3:</b> Ship the order from <b>Pending Shipment</b> when inventory is ready.</li>
+    </ul>
     </div>
     """)
     st.markdown("")
 
     tab_manual_log, tab_manual_fg, tab_manual_ship = st.tabs([
-        "💬 Communication Log", "🚲 Finished Goods", "🚀 Pending Shipment"
+        "📥 Step 1 & 2: Inbox", "🚲 Finished Goods", "🚀 Step 3: Pending Shipment"
     ])
 
     with tab_manual_log:
-        st.html("<div class='section-title'>💬 Sales Communication Log</div>")
+        st.html("<div class='section-title'>📥 Sales Inbox</div>")
         sales_comms = [c for c in state.communication_log if c.module == "Sales"]
         if not sales_comms:
             st.info("No sales inquiries yet.")
@@ -137,6 +139,7 @@ else:
     # ── Sales Orders ──────────────────────────────────────────────────────────
     with tab_orders:
         st.html("<div class='section-title'>ERP Orders (CRM Integrated)</div>")
+        st.caption("Sales orders are now automatically created in the ERP when a CRM deal is won. No manual entry needed.")
         open_orders = sorted([so for so in state.sales_orders if so.status == "Open"], key=lambda x: x.due_day)
         for so in open_orders:
             prod = state.products[so.product_id]

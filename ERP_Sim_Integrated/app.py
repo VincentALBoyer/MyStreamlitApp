@@ -166,8 +166,8 @@ with st.sidebar:
     c1.metric("Day", f"{state.current_day}/{state.max_days}")
     c2.metric("Cash", f"${state.cash:,.0f}")
 
-    st.progress(state.current_day / state.max_days,
-                text=f"Period: {state.current_day}/{state.max_days} days")
+    st.progress(min(1.0, state.current_day / state.max_days),
+                text=f"Period: {min(state.current_day, state.max_days)}/{state.max_days} days")
 
     st.divider()
 
@@ -180,6 +180,18 @@ with st.sidebar:
             st.rerun()
     else:
         st.error("🏁 Simulation Complete")
+        
+        from engine.erp_engine import evaluate_performance
+        perf = evaluate_performance(state)
+        
+        st.markdown(f"""
+        <div style='background:#F8FAFC; padding:10px; border-radius:8px; border:1px solid #E2E8F0; margin-bottom:12px;'>
+            <div style='font-weight:800; color:#1E293B; font-size:1.1rem;'>Final Grade: {perf["grade"]}</div>
+            <div style='color:#64748B; font-size:0.85rem; margin-bottom:4px;'>Score: {perf["score"]}/100</div>
+            <div style='font-size:0.8rem; color:#475569;'>{perf["summary"]}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if st.button("🔄 Reset Simulation", use_container_width=True):
             del st.session_state.sim_state
             st.rerun()

@@ -83,6 +83,28 @@ with d3:
 
 st.divider()
 
+# ── Simulated Data Zone ───────────────────────────────────────────────────────
+st.html("<div class='section-title'>🧪 Simulated Event Logs (For Analysis)</div>")
+st.caption("Use these pre-generated datasets to practice Data Science analysis without playing a full 30-day simulation manually.")
+
+sim1, sim2 = st.columns(2)
+with sim1:
+    with st.container(border=True):
+        st.markdown("#### ✅ Optimized Operations (High Integration)")
+        st.caption("A simulated 30-day log representing a company actively using SRM and CRM modules. Features high revenue and low rework costs.")
+        from engine.erp_engine import generate_simulated_log
+        csv_opt = generate_simulated_log(scenario="optimized")
+        st.download_button("⬇️ Download Optimized Log (CSV)", data=csv_opt, file_name="simulated_log_optimized.csv", mime="text/csv", use_container_width=True)
+
+with sim2:
+    with st.container(border=True):
+        st.markdown("#### ❌ Siloed Operations (No Integration)")
+        st.caption("A simulated 30-day log representing a company doing manual emails. Features lower order volume, higher material spend, and quality issues.")
+        csv_unopt = generate_simulated_log(scenario="unoptimized")
+        st.download_button("⬇️ Download Siloed Log (CSV)", data=csv_unopt, file_name="simulated_log_siloed.csv", mime="text/csv", use_container_width=True)
+
+st.divider()
+
 # ── Live KPI Dashboard ────────────────────────────────────────────────────────
 st.html("<div class='section-title'>📈 Live KPI Dashboard</div>")
 

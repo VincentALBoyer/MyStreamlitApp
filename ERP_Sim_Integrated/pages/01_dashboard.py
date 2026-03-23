@@ -21,6 +21,21 @@ st.html("""
 </div>
 """)
 
+# ── Pedagogical Session Banner ────────────────────────────────────────────────
+if state.crm_enabled:
+    st.info("""**Session 3: Total Integration (ERP + SRM + CRM)**
+
+Your goal is to maximize profitability using full automation. Focus on the CRM Sales Pipeline to convert leads into orders automatically, and manage Customer Service tickets to maintain high satisfaction.""", icon="🎯")
+elif state.srm_enabled:
+    st.info("""**Session 2: Enhancing Procurement (ERP + SRM)**
+
+Your goal is to optimize purchasing. The SRM module gives you access to the Daily Market, Supplier Contracts, and automated AP Invoices. No more manual emails!""", icon="🎯")
+else:
+    st.warning("""**Session 1: Siloed Operations (ERP Only)**
+
+Your goal is to survive manual operations. You must use the Procurement and Sales email inboxes to manually request quotes, accept orders, and convert data into the ERP system. It is slow and cumbersome by design.""", icon="🎯")
+
+
 # ── Module status banner ──────────────────────────────────────────────────────
 m1, m2, m3 = st.columns(3)
 with m1:

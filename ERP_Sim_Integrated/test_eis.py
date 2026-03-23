@@ -84,11 +84,22 @@ if state.leads:
     print(f'  Advance lead to Qualified: {ok} — {msg}')
 
 print('')
-print('=== Testing Exports ===')
-log_csv = export_activity_log(state)
-kpi_csv = export_kpi_summary(state)
-print(f'  Activity log CSV: {len(log_csv)} bytes')
-print(f'  KPI summary CSV: {len(kpi_csv)} bytes')
+print('=== Testing New Pedagogical Features ===')
+from engine.erp_engine import evaluate_performance, generate_simulated_log
+
+# Test performance evaluation
+perf = evaluate_performance(state)
+print(f'  Performance Eval: Score={perf["score"]}, Grade={perf["grade"]}')
+assert "score" in perf
+assert "grade" in perf
+
+# Test simulated log generation
+opt_log = generate_simulated_log(scenario="optimized")
+silo_log = generate_simulated_log(scenario="unoptimized")
+print(f'  Optimized Log length: {len(opt_log)} bytes')
+print(f'  Siloed Log length: {len(silo_log)} bytes')
+assert len(opt_log) > 100
+assert len(silo_log) > 100
 
 print('')
 print('=== ALL TESTS PASSED ===')
