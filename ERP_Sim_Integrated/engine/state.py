@@ -184,6 +184,7 @@ class CommunicationEntry:
     action_type: Optional[str] = None  # rfq_quote | customer_order
     action_data: Optional[dict] = None
     is_read: bool = False
+    status: str = "Pending"  # Pending | Accepted | Rejected | Discarded
 
 @dataclass
 class PendingRFQ:

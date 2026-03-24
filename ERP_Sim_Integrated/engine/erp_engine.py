@@ -359,7 +359,7 @@ def process_customer_order_manual(state: SimState, comm_id: str) -> Tuple[bool, 
     state.sales_orders.append(so)
     
     # Mark communication as processed
-    comm.action_type = "processed"
+    comm.status = "Accepted"
     comm.is_read = True # Mark as read
     comm.subject = f"[PROCESSED] {comm.subject}"
     
@@ -425,6 +425,25 @@ def _process_pending_rfqs(state: SimState) -> None:
                     )
                     state.communication_log.append(comm)
                     state.daily_events.append(f"📧 New Quote received from {sup.name} for {mat.name}")
+            
+            # If no replies were generated, notify the user
+            replies_found = any(c.subject.startswith(f"RE: Quote Request — {pr.qty}x {mat.name}") 
+                               for c in state.communication_log if c.day == state.current_day)
+            if not replies_found:
+                comm = CommunicationEntry(
+                    id=state.next_email_id(),
+                    day=state.current_day,
+                    module="Procurement",
+                    entity_id="SYSTEM",
+                    entity_name="Procurement System",
+                    direction="Inbound",
+                    subject=f"⚠️ No Suppliers Found: {mat.name}",
+                    body=f"We contacted all known suppliers for {pr.qty}x {mat.name}, but none are currently able to fulfill this request.",
+                    action_type="general",
+                    status="Discarded"
+                )
+                state.communication_log.append(comm)
+                state.daily_events.append(f"⚠️ No suppliers found to quote {mat.name}")
         else:
             remaining.append(pr)
     state.pending_rfqs = remaining

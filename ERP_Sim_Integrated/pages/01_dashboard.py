@@ -53,6 +53,40 @@ with m3:
 
 st.divider()
 
+# ── Core KPIs ─────────────────────────────────────────────────────────────────
+kpis = get_kpis(state)
+cash_delta = state.daily_snapshots[-1]["cash"] - state.daily_snapshots[-2]["cash"] if len(state.daily_snapshots) > 1 else 0
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Cash Balance", f"${state.cash:,.0f}", 
+          delta=f"${cash_delta:,.0f}" if cash_delta != 0 else None)
+c2.metric("Net Income", f"${inc['net_income']:,.0f}", 
+          delta=f"{inc['net_margin_pct']:.1f}% Margin")
+c3.metric("Inventory Value", f"${sum(state.stock_materials.values())*5 + sum(state.stock_finished.values())*50:,.0f}") # Approx
+c4.metric("Open Orders", len([so for so in state.sales_orders if so.status == "Open"]))
+
+st.divider()
+
+# ── Smart Strategy Suggestion ─────────────────────────────────────────────────
+low_mats = [m for m, qty in state.stock_materials.items() if qty < state.materials[m].reorder_point]
+high_demand = len([so for so in state.sales_orders if so.status == "Open"])
+
+with st.container(border=True):
+    st.markdown("💡 **Instructor's Strategy Tip**")
+    if not state.game_over:
+        if low_mats:
+            st.warning(f"⚠️ **Supply Chain Alert**: You are low on {len(low_mats)} materials ({', '.join(low_mats)}). Visit **Procurement** to replenish.")
+        elif high_demand > 5:
+            st.info(f"📈 **Demand is High**: You have {high_demand} open orders. Ensure **Production** is running and you have enough Finished Goods.")
+        elif state.cash < 5000:
+            st.error("📉 **Cash is Low**: Monitor your Operating Expenses in **Finance**. Try to fulfill open orders faster to get paid.")
+        else:
+            st.success("✨ **Operations Healthy**: All systems stable. Advance the day to see new market opportunities.")
+    else:
+        st.info("🏁 **Simulation Complete**: Review your performance report and download the event logs.")
+
+st.divider()
+
 # ── KPI Row 1: Financial ──────────────────────────────────────────────────────
 st.html("<div class='section-title'>💰 Financial KPIs</div>")
 k1, k2, k3, k4, k5 = st.columns(5)

@@ -4,6 +4,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 from engine.erp_engine import create_work_order
 
 if "sim_state" not in st.session_state:
@@ -96,6 +97,24 @@ else:
     bar_color = "green" if load_pct < 0.7 else ("orange" if load_pct < 1.0 else "red")
     st.progress(min(1.0, load_pct),
                 text=f"Capacity Load: {capacity_used}/{DAILY_CAPACITY_HOURS} hrs today ({load_pct*100:.0f}%)")
+
+    # WIP Chart
+    st.markdown("📊 **Production Timeline**")
+    wip_data = []
+    for wo in active_wos:
+        prod = state.products[wo.product_id]
+        pct = (wo.hours_completed / wo.hours_required) * 100
+        wip_data.append({"WO": wo.id, "Product": prod.name, "Progress (%)": pct, "Qty": wo.qty})
+    
+    if wip_data:
+        df_wip = pd.DataFrame(wip_data)
+        fig_wip = px.bar(df_wip, x="Progress (%)", y="WO", orientation='h',
+                         hover_data=["Product", "Qty"],
+                         color="Progress (%)", color_continuous_scale="RdYlGn",
+                         range_x=[0, 100],
+                         title="Active Jobs Completion Status")
+        fig_wip.update_layout(height=max(200, len(wip_data)*40), margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_wip, use_container_width=True)
 
     for wo in active_wos:
         prod = state.products[wo.product_id]

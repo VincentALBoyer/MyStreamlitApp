@@ -68,10 +68,11 @@ with tab_pl:
 
     with c_chart:
         # Waterfall
-        labels = ["Revenue", "COGS", "Gross Profit", "OpEx", "Penalties", "Net Income"]
+        labels = ["Revenue", "COGS", "Gross Profit", "Operating Expenses", "Penalties", "Net Income"]
         values = [inc["revenue"], -inc["cogs"], inc["gross_profit"], -inc["total_opex"], -inc["penalties"], inc["net_income"]]
-        colors = ["#1A56DB", "#EF4444", "#10B981", "#F59E0B", "#EF4444",
-                  "#10B981" if inc["net_income"] >= 0 else "#EF4444"]
+        # Use more professional color palette
+        colors = ["#1A56DB", "#DC2626", "#059669", "#D97706", "#EF4444",
+                  "#059669" if inc["net_income"] >= 0 else "#DC2626"]
         fig = go.Figure(go.Bar(x=labels, y=values, marker_color=colors,
                                 text=[f"${abs(v):,.0f}" for v in values],
                                 textposition="outside"))

@@ -26,16 +26,26 @@ st.html("""
 # =============================================================================
 # ===  ERP-ONLY MANUAL SALES MODE  ===========================================
 # =============================================================================
+# ── Pedagogical Context ───────────────────────────────────────────────────────
 if not state.crm_enabled:
+    with st.expander("📖 Why is this page so manual?"):
+        st.info("""
+        **Session 1: The Customer Communication Silo**
+        Without a CRM, customer orders arrive as unstructured 'emails' or 'calls'. 
+        You have no single source of truth for customer history or lead tracking.
+        
+        *   **Step 1**: Check the 'Inbox' for incoming inquiries.
+        *   **Step 2**: Manually verify if you can fulfill the order and 'Enter' it into the ERP.
+        *   **Step 3**: Keep track of fulfillment manually.
+        
+        Later, when CRM is active, this process will be automated and visual!
+        """, icon="🎓")
+
     st.html("""
     <div class='alert-amber'>
     <b>📭 Siloed Operations (ERP Only)</b><br>
-    CRM is disabled. Customer orders arrive as unstructured emails/calls and there is no automated lead conversion.<br>
-    <ul>
-        <li><b>Step 1:</b> Check the <b>Inbox</b> for new customer inquiries.</li>
-        <li><b>Step 2:</b> Click <b>Accept & Enter Order</b> to manually key the data into the ERP.</li>
-        <li><b>Step 3:</b> Ship the order from <b>Pending Shipment</b> when inventory is ready.</li>
-    </ul>
+    CRM is disabled. Customer orders arrive as unstructured emails/calls. 
+    Review the 3-step process below to fulfill demand.
     </div>
     """)
     st.markdown("")
@@ -51,22 +61,36 @@ if not state.crm_enabled:
             st.info("No sales inquiries yet.")
         else:
             for comm in reversed(sales_comms):
-                with st.container(border=True):
+                # Status prefix for header
+                status_icon = "🟡" if comm.status == "Pending" else ("✅" if comm.status == "Accepted" else "❌")
+                status_label = f"[{comm.status.upper()}]" if comm.status != "Pending" else ""
+
+                with st.expander(f"{status_icon} {status_label} {comm.subject} — Day {comm.day}", expanded=(comm.status == "Pending")):
                     c1, c2 = st.columns([4, 1.5])
-                    c1.markdown(f"**{comm.subject}**")
-                    c1.caption(f"Day {comm.day} | {comm.entity_name} ({comm.direction})")
+                    c1.caption(f"From: {comm.entity_name} ({comm.direction})")
                     c1.markdown(f"*{comm.body}*")
                     
                     if comm.action_type == "customer_order" and comm.direction == "Inbound":
-                        if c2.button("Accept & Enter", key=f"acc_sales_{comm.id}", type="primary", use_container_width=True):
-                            ok, msg = process_customer_order_manual(state, comm.id)
-                            if ok:
-                                st.success(f"✅ Order {msg} Entered!")
+                        if comm.status == "Pending":
+                            btn_acc = c2.button("✅ Accept", key=f"acc_s_{comm.id}", use_container_width=True)
+                            btn_rej = c2.button("❌ Reject", key=f"rej_s_{comm.id}", use_container_width=True)
+                            
+                            if btn_acc:
+                                from engine.erp_engine import process_customer_order_manual
+                                ok, msg = process_customer_order_manual(state, comm.id)
+                                if ok:
+                                    # comm.status is updated inside the engine function
+                                    st.toast(f"Order Accepted: {msg}")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                            
+                            if btn_rej:
+                                comm.status = "Rejected"
+                                st.toast(f"Order inquiry from {comm.entity_name} rejected.")
                                 st.rerun()
-                            else:
-                                st.error(msg)
-                    elif comm.action_type == "processed":
-                        c2.success("Processed")
+                        else:
+                            c2.info(f"Status: {comm.status}")
 
     with tab_manual_fg:
         st.html("<div class='section-title'>🚲 Finished Goods Inventory</div>")

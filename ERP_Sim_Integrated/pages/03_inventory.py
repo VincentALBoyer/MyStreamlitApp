@@ -48,6 +48,14 @@ with tab_raw:
                 for wo in state.work_orders if wo.status == "Completed")
             for prod in state.products.values()
         )
+        # Estimate avg daily demand (from previous 7 days sales)
+        shipped_7d = sum(so.qty for so in state.sales_orders 
+                         if so.product_id in state.products and so.status == "Shipped" and (state.current_day - so.shipped_day) <= 7)
+        avg_daily_demand = max(0.1, shipped_7d / 7.0)
+        # For simplicity, use a heuristic for materials: proportional to product demand
+        mat_usage_est = avg_daily_demand * 2 # Heuristic factor
+        days_stock = qty / mat_usage_est if mat_usage_est > 0 else 99
+
         status = "🔴 CRITICAL" if qty == 0 else (
             "🟠 LOW" if qty <= mat.reorder_point else (
                 "🟡 OK" if qty <= mat.reorder_point * 2 else "🟢 Good"
@@ -58,6 +66,7 @@ with tab_raw:
             "On Hand": qty,
             "Inbound POs": inbound,
             "Net Available": net_available,
+            "Days of Stock": f"{days_stock:.1f}",
             "Reorder Point": mat.reorder_point,
             "Unit Cost": f"${mat.cost:.2f}",
             "Stock Value": f"${qty * mat.cost:,.0f}",

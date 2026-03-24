@@ -233,13 +233,23 @@ with st.sidebar:
 
         st.divider()
         st.html("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>QUICK ACTIONS</div>")
-        auto_days = st.number_input("Auto-advance N days", min_value=1, max_value=10, value=3)
+        jump = st.number_input("Advance N days", 1, 30, 1)
         if st.button("⏩ Auto-Run", use_container_width=True):
             from engine.srm_engine import update_supplier_prices
-            for _ in range(min(auto_days, state.max_days - state.current_day + 1)):
+            for _ in range(min(jump, state.max_days - state.current_day + 1)):
                 if not state.game_over:
-                    update_supplier_prices(state)
-                    advance_day(state)
+                    with st.spinner(f"Simulating Day {state.current_day}..."):
+                        update_supplier_prices(state)
+                        advance_day(state)
+            
+            # UX: Post-advance Summary Toasts
+            delivered = len([e for e in state.daily_events if "Received PO" in e])
+            orders = len([e for e in state.daily_events if "New order" in e])
+            if delivered > 0:
+                st.toast(f"📦 {delivered} Materials Delivered", icon="🚛")
+            if orders > 0:
+                st.toast(f"💰 {orders} New Customer Orders", icon="🛒")
+            
             st.rerun()
 
         if st.button("🔄 Reset", use_container_width=True):

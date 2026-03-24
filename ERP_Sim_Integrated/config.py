@@ -69,8 +69,8 @@ SUPPLIERS_CONFIG = {
     "S02": {
         "name": "AsiaParts Co.",
         "category": "Multi-component",
-        "materials": ["M01", "M02", "M04"],
-        "base_price": {"M01": 14.0, "M02": 7.50, "M04": 9.0},
+        "materials": ["M01", "M02", "M04", "M06"],
+        "base_price": {"M01": 14.0, "M02": 7.50, "M04": 9.0, "M06": 5.00},
         "lead_time_days": 7,
         "quality_rate": 0.88,   # higher defect risk
         "reliability": 0.82,

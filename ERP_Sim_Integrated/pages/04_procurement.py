@@ -56,31 +56,60 @@ if not state.srm_enabled:
     """)
     st.markdown("")
 
+    # -- Pedagogical Context --
+    with st.expander("📖 Why is this page so manual?"):
+        st.info("""
+        **Session 1: The ERP Silo Challenge**
+        In this phase, the SRM (Supplier Relationship Management) module is disabled. This simulates a common 
+        real-world problem where the ERP system is 'siloed' from suppliers. 
+        
+        *   **Step 1**: You must manually send inquiries for pricing (Inquiry).
+        *   **Step 2**: You must wait for a manual response (Simulates human/email delay).
+        *   **Step 3**: You must manually enter the data back into the ERP to create a PO.
+        
+        Notice how much time and potential for error this creates!
+        """, icon="🎓")
+    
     tab_manual_req, tab_manual_log, tab_manual_pos = st.tabs([
         "📧 Step 1: Send Request", "📥 Step 3: Inbox", "📦 Open POs"
     ])
 
     with tab_manual_req:
-        st.html("<div class='section-title'>📧 Compose Quote Request</div>")
-        with st.container(border=True):
-            mat_rfq = st.selectbox("Material Needed", list(state.materials.keys()),
-                                    format_func=lambda x: state.materials[x].name)
-            qty_rfq = st.number_input("Quantity Required", min_value=10, max_value=2000, value=100, step=10)
-            
-            st.text_input("To:", "supplier_network@manual-erp.net", disabled=True)
-            st.text_input("Subject:", f"Quote Request — {qty_rfq}x {state.materials[mat_rfq].name}")
-            st.text_area("Message:", f"Hello,\n\nPlease provide your best price and lead time for {qty_rfq} units of {state.materials[mat_rfq].name}.\n\nBest regards,\nProcurement", height=80)
-            
-            if st.button("📤 Send Quote Request", type="primary", use_container_width=True):
-                ok, msg = request_quote_manual(state, mat_rfq, qty_rfq)
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
+        st.html("<div class='section-title'>📩 Send Manual Email Inquiries</div>")
+        st.caption("One-click to send a formal inquiry to the preferred supplier. Replies arrive in 1-2 days.")
+        
+        # Grid of materials for quick inquiries
+        mat_ids = list(state.materials.keys())
+        for i in range(0, len(mat_ids), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(mat_ids):
+                    mid = mat_ids[i + j]
+                    mat = state.materials[mid]
+                    with cols[j]:
+                        with st.container(border=True):
+                            st.markdown(f"**{mat.name}**")
+                            qty_inq = st.number_input("Qty", min_value=1, max_value=1000, value=100, step=10, key=f"qty_inq_{mid}")
+                            
+                            # Logic: Disable if inquiry sent today or pending
+                            already_sent = any(pr.material_id == mid and pr.day_sent == state.current_day for pr in state.pending_rfqs)
+                            
+                            if st.button("📧 Send Inquiry", key=f"btn_inq_{mid}", use_container_width=True, disabled=already_sent):
+                                from engine.erp_engine import request_quote_manual
+                                ok, msg = request_quote_manual(state, mid, qty_inq)
+                                if ok:
+                                    st.toast(f"Inquiry sent for {mat.name}", icon="✉️")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                            
+                            if already_sent:
+                                st.caption("🕒 Inquiry in flight...")
         
         # Pending requests
         if state.pending_rfqs:
-            st.markdown("**Awaiting Replies:**")
+            st.divider()
+            st.markdown("**⏳ Awaiting Replies:**")
             for pr in state.pending_rfqs:
                 mat = state.materials[pr.material_id]
                 st.caption(f"• Request for {pr.qty}x {mat.name} sent Day {pr.day_sent}. Expected reply: Day {pr.day_sent + 1}.")
@@ -92,22 +121,39 @@ if not state.srm_enabled:
             st.info("No communications logged yet.")
         else:
             for comm in reversed(proc_comms):
-                with st.container(border=True):
+                # Status prefix for header
+                status_icon = "🟡" if comm.status == "Pending" else ("✅" if comm.status == "Accepted" else "❌")
+                status_label = f"[{comm.status.upper()}]" if comm.status != "Pending" else ""
+                
+                # Collapsible Email Wrapper
+                with st.expander(f"{status_icon} {status_label} {comm.subject} — Day {comm.day}", expanded=(comm.status == "Pending")):
                     c1, c2 = st.columns([4, 1.5])
-                    c1.markdown(f"**{comm.subject}**")
-                    c1.caption(f"Day {comm.day} | {comm.entity_name} ({comm.direction})")
+                    c1.caption(f"From: {comm.entity_name} ({comm.direction})")
                     c1.markdown(f"*{comm.body}*")
                     
                     if comm.action_type == "rfq_quote" and comm.direction == "Inbound":
                         data = comm.action_data
-                        if c2.button("Accept Quote", key=f"accept_{comm.id}", type="primary", use_container_width=True):
-                            ok, msg = create_manual_po(state, data["supplier_id"], data["material_id"], 
-                                                     data["qty"], data["price"], data["lead_time"])
-                            if ok:
-                                st.success(f"✅ PO Created: {msg}")
+                        if comm.status == "Pending":
+                            btn_acc = c2.button("✅ Accept", key=f"acc_{comm.id}", use_container_width=True)
+                            btn_rej = c2.button("❌ Reject", key=f"rej_{comm.id}", use_container_width=True)
+                            
+                            if btn_acc:
+                                from engine.erp_engine import create_manual_po
+                                ok, msg = create_manual_po(state, data["supplier_id"], data["material_id"], 
+                                                         data["qty"], data["price"], data["lead_time"])
+                                if ok:
+                                    comm.status = "Accepted"
+                                    st.toast(f"PO Created: {msg}")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                            
+                            if btn_rej:
+                                comm.status = "Rejected"
+                                st.toast(f"Quote from {comm.entity_name} rejected.")
                                 st.rerun()
-                            else:
-                                st.error(msg)
+                        else:
+                            c2.info(f"Status: {comm.status}")
 
     with tab_manual_pos:
         st.html("<div class='section-title'>📦 Inbound Monitor (Open POs)</div>")
