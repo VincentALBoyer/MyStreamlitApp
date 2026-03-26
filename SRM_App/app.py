@@ -3,7 +3,7 @@ import pandas as pd
 import altair as alt
 import logic
 
-st.set_page_config(page_title="SAP SRM | Advanced Sourcing", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="SRM | Advanced Sourcing", page_icon="🏭", layout="wide")
 
 # Styling
 st.markdown("""
@@ -41,7 +41,15 @@ with st.sidebar:
     c1.metric("Day", f"{state.current_day} / {state.max_days}")
     
     total_cost = state.total_spend + state.total_rework_cost + state.total_stockout_penalty + state.total_storage_cost
-    help_text = f"Spend: ${state.total_spend:,.0f}\nStockout: ${state.total_stockout_penalty:,.0f}\nRework: ${state.total_rework_cost:,.0f}\nStorage: ${state.total_storage_cost:,.0f}"
+    # help_text = f"Spend: ${state.total_spend:,.0f}\nStockout: ${state.total_stockout_penalty:,.0f}\nRework: ${state.total_rework_cost:,.0f}\nStorage: ${state.total_storage_cost:,.0f}"
+    help_text = (
+        f"- Spend: ${state.total_spend:,.0f}\n"
+        f"- Stockout: ${state.total_stockout_penalty:,.0f}\n"
+        f"- Rework: ${state.total_rework_cost:,.0f}\n"
+        f"- Storage: ${state.total_storage_cost:,.0f}"
+        )
+
+
     c2.metric("Total Cost", f"${total_cost:,.0f}", help=help_text)
     
     if not state.game_over:
@@ -142,7 +150,7 @@ if menu == "🚀 Procurement Cockpit":
             supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
             po_data.append({
                 "PO #": po.id,
-                "Vendor": supp.name,
+                "Vendor": supp.name if supp else "Unknown Vendor",
                 "Qty": po.qty_ordered,
                 "Est. Arrival": f"Day {po.expected_arrival_day}",
                 "Status": "Pending (Draft)" if po.status == "Draft" else ("Processing" if po.status == "Processing" else ("Late" if state.current_day > po.expected_arrival_day else "In Transit"))

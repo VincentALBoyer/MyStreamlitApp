@@ -141,6 +141,11 @@ def commit_draft_orders(state: GameState):
     
     for po in drafts:
         supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+        if not supp:
+            # Handle deleted or changed supplier from old session state
+            po.status = "Cancelled"
+            continue
+            
         cost = po.qty_ordered * supp.current_price
         
         # Final Budget Check (Removed - Unlimited)
@@ -177,7 +182,7 @@ def switch_supplier(state: GameState, supplier_id: str):
     supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
     if supp:
         # If switching, maybe a small admin fee?
-        if state.active_supplier and state.active_supplier.id != supplier_id:
+        if state.active_supplier is not None and state.active_supplier.id != supplier_id:
              state.daily_events.append(f"🔄 Switched partner to {supp.name}")
         state.active_supplier = supp
 
@@ -239,6 +244,7 @@ def pay_invoice(state: GameState, invoice_id: str):
     if not inv or inv.status == "Paid": return
     
     supp = next((s for s in state.available_suppliers if s.id == inv.supplier_id), None)
+    if not supp: return
     
     # 1. Deduct Cash
     state.cash -= inv.amount
@@ -262,58 +268,7 @@ def pay_invoice(state: GameState, invoice_id: str):
     # Clamp Score
     supp.relationship_score = max(0.0, min(100.0, supp.relationship_score))
 
-def process_daily_turn(state: GameState):
-    """Manual PO placement. If status='Draft', no cash deduction yet."""
-    supp = next((s for s in state.available_suppliers if s.id == supplier_id), None)
-    if not supp:
-        return False, "Invalid Supplier"
-    
-    if qty < supp.min_order_qty:
-        return False, f"Below Min Order Qty ({supp.min_order_qty})"
-    
-    # Cost Check
-    cost = qty * supp.current_price
-    # Removed Budget Check as per user request (Unlimited Budget, Minimize Cost)
-    # if state.cash < cost:
-    #    return False, "Insufficient Budget"
-    
-    # Setup PO
-    arrival_day = state.current_day + supp.quoted_lead_time
-    
-    po = PurchaseOrder(
-        id=f"PO-{state.current_day}-{random.randint(100,999)}",
-        supplier_id=supp.id,
-        day_placed=state.current_day,
-        qty_ordered=qty,
-        quoted_lead_time=supp.quoted_lead_time,
-        expected_arrival_day=arrival_day,
-        status=status
-    )
-    
-    if status == "Open":
-        # Commit Immediately
-        # MOVED CASH DEDUCTION TO INVOICE PAYMENT
-        # state.cash -= cost
-        state.total_spend += cost
-        
-        inv = Invoice(
-            id=f"INV-{str(random.randint(1000,9999))}", # Temp ID until PO ID is fixed? PO ID is created above.
-            po_id=po.id,
-            supplier_id=supp.id,
-            amount=cost,
-            due_day=arrival_day
-        )
-        # Fix: Using PO ID for invoice ID consistency
-        inv.id = f"INV-{po.id}"
-        state.invoices.append(inv)
-        
-        state.daily_events.append(f"📝 PO Placed: {qty} units from {supp.name} (Inv Due Day {arrival_day})")
-    elif status == "Draft":
-        # Do not deduct cash yet. Do not log public event.
-        pass
-        
-    state.active_pos.append(po)
-    return True, "Order Placed"
+
 
 def process_daily_turn(state: GameState):
     state.daily_events = []
@@ -365,10 +320,11 @@ def process_daily_turn(state: GameState):
     for inv in state.invoices:
         if inv.status == "Unpaid" and state.current_day > inv.due_day:
             supp = next((s for s in state.available_suppliers if s.id == inv.supplier_id), None)
-            supp.relationship_score -= 2.0 # WAS 1.0 - Accelerated decay
-            # Log only periodically?
-            if random.random() < 0.2:
-                 state.daily_events.append(f"⚠️ OVERDUE: Invoice {inv.id} for {supp.name}. Relationship plummeting (-2).")
+            if supp:
+                supp.relationship_score -= 2.0 # WAS 1.0 - Accelerated decay
+                # Log only periodically?
+                if random.random() < 0.2:
+                     state.daily_events.append(f"⚠️ OVERDUE: Invoice {inv.id} for {supp.name}. Relationship plummeting (-2).")
     
     # 1. RECEIVING LOGIC (Check for arrivals)
     # We iterate a copy to modify the list safely if we were removing (though we keep POs for history? No, move to delivery log)
@@ -383,11 +339,12 @@ def process_daily_turn(state: GameState):
              is_late = random.random() > next((s.true_reliability for s in state.available_suppliers if s.id == po.supplier_id), 0.9)
              if is_late:
                  supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
-                 # Fix: Ensure max is at least 1 to avoid ValueError if variance is 0
-                 var_days = max(1, supp.true_lead_time_var)
-                 days_late = random.randint(1, var_days)
-                 po.expected_arrival_day += days_late
-                 state.daily_events.append(f"⚠️ NOTICE: PO {po.id} delayed by carrier. New Arrival: Day {po.expected_arrival_day}")
+                 if supp:
+                     # Fix: Ensure max is at least 1 to avoid ValueError if variance is 0
+                     var_days = max(1, supp.true_lead_time_var)
+                     days_late = random.randint(1, var_days)
+                     po.expected_arrival_day += days_late
+                     state.daily_events.append(f"⚠️ NOTICE: PO {po.id} delayed by carrier. New Arrival: Day {po.expected_arrival_day}")
 
     # 2. PRODUCTION RUN (Consumption - Using Start-of-Day Stock)
     demand = state.production_schedule.get(state.current_day, 0)
@@ -419,6 +376,9 @@ def process_daily_turn(state: GameState):
         if po.status == "Processing":
             # Add to Inventory
             supp = next((s for s in state.available_suppliers if s.id == po.supplier_id), None)
+            if not supp:
+                po.status = "Received"
+                continue
             
             # Defects logic
             defect_rate = supp.true_defect_rate
