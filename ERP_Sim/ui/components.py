@@ -29,7 +29,8 @@ def render_topbar() -> None:
         if state.game_over:
             st.error(f"Simulation complete — Net Profit: ${kpis['profit']:,.0f}")
             if st.button("Restart Simulation", width='stretch'):
-                del st.session_state.game_state
+                for key in ("game_state", "onboarded", "student_name", "student_id"):
+                    st.session_state.pop(key, None)
                 st.rerun()
         else:
             if st.button("▶️ Advance to Next Day", type="primary", width='stretch'):
