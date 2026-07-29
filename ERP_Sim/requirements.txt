@@ -1,5 +1,5 @@
-streamlit
+streamlit>=1.37
 pandas
 numpy
-matplotlib
+fpdf2>=2.7.4
 pyinstaller

@@ -322,3 +322,120 @@ def get_kpis(state: GameState) -> Dict:
 
 def save_day_snapshot(state: GameState, kpis: Dict):
     state.history.append({"day": state.current_day, **kpis})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#                    CROSS-MODULE VIEWS (SRM / CRM / Finance)
+# ═══════════════════════════════════════════════════════════════════════════════
+# These read the same GameState every other module writes to - the point being
+# demonstrated to students is that SRM, CRM and Finance are simply different
+# views over one shared system of record, not separate databases.
+
+def advance_day(state: GameState, supplier_order_qtys: Dict[str, int]) -> List[str]:
+    """Run one full day of the simulation: place queued supplier orders, advance
+    the clock, process deliveries, generate new customer demand, and apply daily
+    costs/penalties. Returns the day's event log (also stored on state)."""
+    daily_logs = []
+
+    # 1. Place supplier orders queued by the SRM module
+    for sid, qty in supplier_order_qtys.items():
+        if qty and qty > 0:
+            supplier = SUPPLIERS[sid]
+            if place_supplier_order(state, sid, qty):
+                daily_logs.append(f"🛒 Ordered {qty} from {supplier.name}")
+            else:
+                daily_logs.append(f"❌ Order failed: {supplier.name} (Check Cash/Min Order)")
+
+    state.daily_events = daily_logs
+
+    # 2. Advance the clock
+    state.current_day += 1
+    update_supplier_availability(state)
+    state.daily_events.extend(process_supplier_deliveries(state))
+    state.daily_events.extend(process_customer_deliveries(state))
+
+    # 3. New customer demand (multiple orders & occasional demand surge)
+    base_demand = generate_customer_demand(state.current_day)
+
+    is_heavy = random.random() < 0.15
+    if is_heavy:
+        base_demand = int(base_demand * 2.5)
+        state.daily_events.append("🚨 HEAVY DEMAND SURGE! Orders spiking!")
+
+    num_orders = random.randint(2, 5) if is_heavy else random.randint(1, 3)
+    for _ in range(num_orders):
+        qty = max(5, int(base_demand / num_orders * random.uniform(0.8, 1.2)))
+        new_o = create_customer_order(state, qty)
+        state.daily_events.append(f"🛍️ New Order: {new_o.customer.name} ({qty} units)")
+
+    # 4. Daily costs & penalties
+    h_cost = calculate_holding_costs(state)
+    if h_cost > 0:
+        state.daily_events.append(f"Holding Cost: -${h_cost:.0f}")
+    state.daily_events.extend(calculate_daily_penalties(state))
+
+    # 5. Snapshot & game-over check
+    save_day_snapshot(state, get_kpis(state))
+    if state.current_day >= state.max_days:
+        state.game_over = True
+
+    return state.daily_events
+
+
+def get_pnl_statement(state: GameState) -> Dict:
+    """Simple Profit & Loss statement derived from running totals - what a
+    Finance/Controlling module (SAP FI-CO, Oracle GL) would report."""
+    gross_margin = state.total_revenue - state.total_cost
+    net_profit = gross_margin - state.total_holding_cost - state.total_penalties
+    return {
+        "revenue": state.total_revenue,
+        "cogs": state.total_cost,
+        "gross_margin": gross_margin,
+        "holding_costs": state.total_holding_cost,
+        "penalties": state.total_penalties,
+        "net_profit": net_profit,
+    }
+
+
+def get_supplier_scorecard(state: GameState) -> List[Dict]:
+    """Per-supplier spend/volume/lead-time performance - a basic SRM scorecard."""
+    rows = []
+    for sid, supplier in SUPPLIERS.items():
+        orders = [o for o in state.supplier_orders if o.supplier_id == sid]
+        delivered = [o for o in orders if o.status == "delivered"]
+        units = sum(o.quantity for o in orders)
+        spend = sum(o.quantity * o.unit_cost for o in orders)
+        if delivered:
+            avg_lead_time = sum(o.day_delivered - o.day_ordered for o in delivered) / len(delivered)
+        else:
+            avg_lead_time = None
+        rows.append({
+            "supplier": supplier.name,
+            "orders": len(orders),
+            "units_purchased": units,
+            "total_spend": spend,
+            "avg_lead_time_days": avg_lead_time,
+        })
+    return rows
+
+
+def get_customer_scorecard(state: GameState) -> List[Dict]:
+    """Per-customer order/revenue/on-time performance - a basic CRM scorecard."""
+    rows = []
+    for customer in CUSTOMERS:
+        orders = [o for o in state.customer_orders if o.customer.id == customer.id]
+        delivered = [o for o in orders if o.status == "delivered"]
+        units = sum(o.quantity for o in orders)
+        revenue = sum(o.quantity * state.selling_price for o in delivered)
+        if delivered:
+            on_time = sum(1 for o in delivered if o.day_delivered <= o.due_date)
+            on_time_pct = on_time / len(delivered) * 100
+        else:
+            on_time_pct = None
+        rows.append({
+            "customer": customer.name,
+            "orders": len(orders),
+            "units_ordered": units,
+            "revenue": revenue,
+            "on_time_pct": on_time_pct,
+        })
+    return rows
