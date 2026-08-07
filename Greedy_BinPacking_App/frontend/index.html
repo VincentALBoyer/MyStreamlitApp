@@ -46,11 +46,17 @@
     flex-shrink: 0;
     border: 1px solid rgba(0,0,0,0.15);
   }
-  .bp-label { font-size: 12px; color: #333; }
-  .bp-rotate {
+  .bp-label { font-size: 12px; color: #333; line-height: 1.3; }
+  .bp-label-id { font-weight: 600; }
+  .bp-label-detail { font-size: 10px; color: #666; }
+  .bp-controls {
     position: absolute;
     top: 2px;
     right: 2px;
+    display: flex;
+    gap: 2px;
+  }
+  .bp-icon-btn {
     width: 18px;
     height: 18px;
     border: none;
@@ -61,7 +67,7 @@
     line-height: 18px;
     padding: 0;
   }
-  .bp-rotate:hover { background: #ddd; }
+  .bp-icon-btn:hover { background: #ddd; }
   #bp-bin-wrap {
     border: 2px solid #333;
     position: relative;
@@ -85,6 +91,11 @@
     font-weight: 600;
     box-sizing: border-box;
   }
+  .bp-placed .bp-icon-btn {
+    background: rgba(255,255,255,0.85);
+  }
+  .bp-placed .bp-icon-btn:hover { background: #fff; }
+  .bp-placed .bp-delete { color: #b3261e; font-weight: 700; }
   .bp-preview {
     position: absolute;
     border: 2px dashed #999;
@@ -145,6 +156,10 @@
     const preview = document.createElement("div");
     preview.className = "bp-preview";
 
+    function tooltipText(profit, w, h) {
+      return "Profit: " + profit + "  •  Size: " + w + "×" + h;
+    }
+
     let dragItem = null;
     let dragRotated = false;
     let dragSource = null; // "palette" | "placed"
@@ -182,7 +197,36 @@
       el.style.height = (p.h * CELL) + "px";
       el.style.background = p.color;
       el.style.cursor = "grab";
+      el.title = tooltipText(p.profit, p.w, p.h);
       el.textContent = "#" + p.id;
+
+      const controls = document.createElement("div");
+      controls.className = "bp-controls";
+
+      const rotateBtn = document.createElement("button");
+      rotateBtn.className = "bp-icon-btn";
+      rotateBtn.type = "button";
+      rotateBtn.textContent = "⟳";
+      rotateBtn.title = "Rotate in place";
+      rotateBtn.onclick = (e) => {
+        e.stopPropagation();
+        // Rotate in place: keep the same top-left corner, flip width/height.
+        sendValue({ source: "placed", item_id: p.id, x: p.x, y: p.y, rotated: !p.rotated });
+      };
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "bp-icon-btn bp-delete";
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "✕";
+      deleteBtn.title = "Remove from bin";
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        sendValue({ source: "placed", remove: true, item_id: p.id, x: 0, y: 0, rotated: false });
+      };
+
+      controls.appendChild(rotateBtn);
+      controls.appendChild(deleteBtn);
+      el.appendChild(controls);
 
       el.addEventListener("dragstart", (e) => {
         // dragItem.w/h store BASE (unrotated) dimensions, same convention as
@@ -212,7 +256,7 @@
       card.className = "bp-card";
       card.draggable = true;
       card.dataset.rotated = "0";
-      card.title = "Profit: " + item.profit + "  •  Size: " + item.w + "×" + item.h;
+      card.title = tooltipText(item.profit, item.w, item.h);
 
       const swatch = document.createElement("div");
       swatch.className = "bp-swatch";
@@ -220,10 +264,20 @@
 
       const label = document.createElement("div");
       label.className = "bp-label";
-      label.textContent = "#" + item.id;
+      const idLine = document.createElement("div");
+      idLine.className = "bp-label-id";
+      idLine.textContent = "#" + item.id;
+      const detailLine = document.createElement("div");
+      detailLine.className = "bp-label-detail";
+      detailLine.textContent = item.w + "×" + item.h + " · $" + item.profit;
+      label.appendChild(idLine);
+      label.appendChild(detailLine);
+
+      const controls = document.createElement("div");
+      controls.className = "bp-controls";
 
       const rotateBtn = document.createElement("button");
-      rotateBtn.className = "bp-rotate";
+      rotateBtn.className = "bp-icon-btn";
       rotateBtn.type = "button";
       rotateBtn.textContent = "⟳";
       rotateBtn.onclick = (e) => {
@@ -232,13 +286,15 @@
         card.dataset.rotated = isRotated ? "0" : "1";
         const w = isRotated ? item.w : item.h;
         const h = isRotated ? item.h : item.w;
-        card.title = "Profit: " + item.profit + "  •  Size: " + w + "×" + h +
-          (isRotated ? "" : " (rotated)");
+        card.title = tooltipText(item.profit, w, h) + (isRotated ? "" : " (rotated)");
+        detailLine.textContent = w + "×" + h + " · $" + item.profit;
       };
+
+      controls.appendChild(rotateBtn);
 
       card.appendChild(swatch);
       card.appendChild(label);
-      card.appendChild(rotateBtn);
+      card.appendChild(controls);
 
       card.addEventListener("dragstart", (e) => {
         const rotated = card.dataset.rotated === "1";
