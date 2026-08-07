@@ -46,7 +46,12 @@ def build_live_chart(xmax, revealed, mode, current_x=None, improving_xs=None, be
     all_x = list(range(xmax + 1))
     unrevealed = [x for x in all_x if x not in revealed]
     if unrevealed:
-        click_hint = "click to start here" if mode == "local" and current_x is None else "click to reveal"
+        if mode == "local" and current_x is None:
+            click_hint = "click to start here"
+        elif mode == "greedy":
+            click_hint = "click to pick - final answer"
+        else:
+            click_hint = "click to reveal"
         fig.add_trace(go.Scatter(
             x=unrevealed, y=[SHELF_Y] * len(unrevealed), mode="markers",
             marker=dict(size=11, color=COLOR_UNREVEALED, symbol="circle-open", line=dict(width=1.5)),

@@ -79,6 +79,26 @@ def test_score_round_penalizes_getting_trapped():
     print(f"   - trapped score={trapped['score']} < baseline={baseline}.")
 
 
+def test_neighbor_xs_basic_and_boundaries():
+    print("9. neighbor_xs: n=1 matches the original left/right neighborhood...")
+    assert gl.neighbor_xs(5, 1, 20) == [4, 6]
+    assert gl.neighbor_xs(0, 1, 20) == [1]  # no left neighbor at the boundary
+    assert gl.neighbor_xs(20, 1, 20) == [19]  # no right neighbor at the boundary
+    print("   - Matches.")
+
+    print("10. neighbor_xs: n=2 widens the neighborhood on each side...")
+    assert gl.neighbor_xs(5, 2, 20) == [3, 4, 6, 7]
+    assert gl.neighbor_xs(1, 2, 20) == [0, 2, 3]  # clipped at the left boundary
+    assert gl.neighbor_xs(19, 2, 20) == [17, 18, 20]  # clipped at the right boundary
+    print("   - Clips correctly at both boundaries.")
+
+    print("11. neighbor_xs never includes the current position itself...")
+    for n in gl.NEIGHBORHOOD_CHOICES:
+        for x in range(0, 21):
+            assert x not in gl.neighbor_xs(x, n, 20)
+    print("   - Confirmed across all neighborhood sizes and positions.")
+
+
 if __name__ == "__main__":
     test_seeding_is_reproducible()
     test_round_shapes_and_growth()
@@ -87,4 +107,5 @@ if __name__ == "__main__":
     test_score_round_exhaustive_is_fixed_baseline()
     test_score_round_rewards_efficient_success()
     test_score_round_penalizes_getting_trapped()
+    test_neighbor_xs_basic_and_boundaries()
     print("\nAll game_logic tests passed.")

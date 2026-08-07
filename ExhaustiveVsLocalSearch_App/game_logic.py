@@ -23,6 +23,10 @@ NOISE_STD = 0.12
 QUALITY_WEIGHT = 0.65
 EFFICIENCY_WEIGHT = 0.35
 
+# Local search advanced settings, chosen once at game start (see app.py intro).
+NEIGHBORHOOD_CHOICES = [1, 2]  # closest neighbors revealed per side of the current position
+MAX_RESTARTS_CAP = 5           # upper bound offered for "restarts allowed"
+
 
 def new_game_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -86,6 +90,16 @@ def local_minima_indices(ys: list) -> list:
 
 def is_improving(candidate_y: float, current_y: float) -> bool:
     return candidate_y < current_y
+
+
+def neighbor_xs(current_x: int, n: int, xmax: int) -> list:
+    """The n closest candidate x's on each side of current_x (clipped to
+    [0, xmax], excluding current_x itself) - the neighborhood a local-search
+    step reveals and can move into. n=1 is the slide's basic left/right
+    neighborhood; n=2 widens it to the two closest on each side."""
+    lo = max(0, current_x - n)
+    hi = min(xmax, current_x + n)
+    return [x for x in range(lo, hi + 1) if x != current_x]
 
 
 def score_round(found_y: float, ys: list, evaluations: int) -> dict:
