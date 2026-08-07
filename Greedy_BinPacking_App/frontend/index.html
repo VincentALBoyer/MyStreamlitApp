@@ -255,7 +255,6 @@
       const card = document.createElement("div");
       card.className = "bp-card";
       card.draggable = true;
-      card.dataset.rotated = "0";
       card.title = tooltipText(item.profit, item.w, item.h);
 
       const swatch = document.createElement("div");
@@ -273,37 +272,17 @@
       label.appendChild(idLine);
       label.appendChild(detailLine);
 
-      const controls = document.createElement("div");
-      controls.className = "bp-controls";
-
-      const rotateBtn = document.createElement("button");
-      rotateBtn.className = "bp-icon-btn";
-      rotateBtn.type = "button";
-      rotateBtn.textContent = "⟳";
-      rotateBtn.onclick = (e) => {
-        e.stopPropagation();
-        const isRotated = card.dataset.rotated === "1";
-        card.dataset.rotated = isRotated ? "0" : "1";
-        const w = isRotated ? item.w : item.h;
-        const h = isRotated ? item.h : item.w;
-        card.title = tooltipText(item.profit, w, h) + (isRotated ? "" : " (rotated)");
-        detailLine.textContent = w + "×" + h + " · $" + item.profit;
-      };
-
-      controls.appendChild(rotateBtn);
-
       card.appendChild(swatch);
       card.appendChild(label);
-      card.appendChild(controls);
 
+      // No rotate control here — drop it in as-is and rotate it afterward
+      // with the ⟳ button on the placed item, so there's only one place to
+      // do it instead of a redundant pre-drag choice.
       card.addEventListener("dragstart", (e) => {
-        const rotated = card.dataset.rotated === "1";
-        const w = rotated ? item.h : item.w;
-        const h = rotated ? item.w : item.h;
-        startDrag(item.id, item.w, item.h, item.color, rotated, "palette");
+        startDrag(item.id, item.w, item.h, item.color, false, "palette");
         e.dataTransfer.setData("text/plain", String(item.id));
         e.dataTransfer.effectAllowed = "move";
-        makeGhost(e, w, h, item.color);
+        makeGhost(e, item.w, item.h, item.color);
       });
 
       card.addEventListener("dragend", () => {

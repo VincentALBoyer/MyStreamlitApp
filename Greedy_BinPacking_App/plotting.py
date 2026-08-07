@@ -42,13 +42,19 @@ def build_instance_figure(bin_w: int, bin_h: int, items_by_id: dict, placed: lis
     for p in placed:
         _, _, profit = items_by_id.get(p["item_id"], (0, 0, p["profit"]))
         color = profit_color(profit, vmin, vmax)
+        # The game places items with y=0 at the TOP of the bin (CSS/screen
+        # convention, growing downward), but Plotly's y-axis defaults to
+        # y=0 at the bottom. Flip here so the plot matches what was seen
+        # in-game instead of rendering it upside down.
+        y0 = bin_h - p["y"] - p["h"]
+        y1 = bin_h - p["y"]
         fig.add_shape(
-            type="rect", x0=p["x"], y0=p["y"], x1=p["x"] + p["w"], y1=p["y"] + p["h"],
+            type="rect", x0=p["x"], y0=y0, x1=p["x"] + p["w"], y1=y1,
             line=dict(color=border_color, width=border_width), fillcolor=color,
         )
         if show_labels:
             fig.add_annotation(
-                x=p["x"] + p["w"] / 2, y=p["y"] + p["h"] / 2,
+                x=p["x"] + p["w"] / 2, y=(y0 + y1) / 2,
                 text=f"#{p['item_id']}", showarrow=False, font=dict(color="white", size=11),
             )
 

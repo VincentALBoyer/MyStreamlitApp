@@ -179,9 +179,9 @@ across all 5 rounds. Your total time is tracked too.
         feasible = is_feasible(rs)
 
         st.caption(
-            "Drag a card from the list into the bin — or drag a placed item to move it, "
-            "or drag it back onto the list to remove it. Click the ⟳ on a card to rotate "
-            "it before dragging. Hover a card to see its profit and size."
+            "Drag a card from the list into the bin. Once placed, drag an item to move "
+            "it, click ⟳ to rotate it, or click ✕ to remove it. Hover a card to see its "
+            "profit and size."
         )
 
         drop = render_bin_packer(rs)
