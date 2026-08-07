@@ -312,7 +312,7 @@ instances you want bundled into one file.
     col1, col2, col3 = st.columns(3)
     seed = col1.number_input("Seed / code", min_value=0, value=42, step=1)
     difficulty = col2.slider("Difficulty", 1, 10, 5)
-    n_instances = col3.number_input("Number of instances", min_value=1, max_value=50, value=5, step=1)
+    n_instances = col3.number_input("Number of instances", min_value=1, max_value=50, value=10, step=1)
 
     if st.button("Generate instances", type="primary"):
         st.session_state["challenge_instances"] = generate_instances(int(seed), float(difficulty), int(n_instances))

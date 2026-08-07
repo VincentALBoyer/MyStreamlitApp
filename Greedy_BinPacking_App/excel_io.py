@@ -29,6 +29,26 @@ ITEM_COLUMNS = ["instance_id", "bin_width", "bin_height", "item_id", "width", "h
 SOLUTION_COLUMNS = ["x", "y", "rotated"]
 ALL_COLUMNS = ITEM_COLUMNS + SOLUTION_COLUMNS
 
+FORMAT_NOTES = [
+    "One row per item. instance_id groups items that belong to the same bin — "
+    "there is one fixed bin per instance_id, sized bin_width x bin_height.",
+    "instance_id, bin_width, bin_height, item_id, width, height, profit are the "
+    "problem data — do not edit them. Scoring mode checks a signature computed "
+    "over these columns and will flag the file if they don't match what was "
+    "generated.",
+    "Fill in x, y, and rotated only for the items you decide to pack. Leave x "
+    "AND y both blank to mark an item as not placed — that's fine, it just "
+    "scores no profit for that item. Filling in only one of x/y is invalid.",
+    "Coordinates: x=0, y=0 is the bin's TOP-LEFT corner. x increases to the "
+    "right, y increases DOWNWARD (screen/matrix convention).",
+    "rotated: TRUE swaps the item's width and height (a w x h item occupies "
+    "h x w once rotated). Leave blank or FALSE for no rotation.",
+    "Placements must not overlap or go outside the bin. If any item in an "
+    "instance does, that WHOLE instance scores 0 profit, even for the items "
+    "that were placed validly.",
+    "Upload this same file, filled in, to Scoring mode to get graded.",
+]
+
 
 def generate_instances(seed: int, difficulty: float, n_instances: int) -> list:
     """Reproducible from (seed, difficulty, n_instances) alone."""
@@ -61,14 +81,6 @@ def _signature(rows) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _to_excel_bytes(sheets: dict) -> bytes:
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        for sheet_name, df in sheets.items():
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-    return buf.getvalue()
-
-
 def instances_workbook_bytes(instances: list, seed, difficulty, n_instances: int, placements_by_instance: dict = None) -> bytes:
     """Build the single combined workbook.
 
@@ -93,7 +105,15 @@ def instances_workbook_bytes(instances: list, seed, difficulty, n_instances: int
     meta_df = pd.DataFrame([{
         "seed": seed, "difficulty": difficulty, "num_instances": n_instances, "signature": signature,
     }])
-    return _to_excel_bytes({"items": items_df, "meta": meta_df})
+    notes_df = pd.DataFrame({"Format notes": FORMAT_NOTES})
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        items_df.to_excel(writer, sheet_name="items", index=False)
+        meta_df.to_excel(writer, sheet_name="meta", index=False)
+        notes_df.to_excel(writer, sheet_name="notes", index=False)
+        writer.sheets["notes"].column_dimensions["A"].width = 100
+    return buf.getvalue()
 
 
 def parse_submission_workbook(file):
