@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY app.py .
 COPY game_engine.py .
+COPY ui/ ./ui/
 
 # Expose Streamlit port
 EXPOSE 8080
