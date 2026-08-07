@@ -1,0 +1,348 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  #bp-root {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+  #bp-palette {
+    width: 150px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .bp-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 6px;
+    cursor: grab;
+    background: #fafafa;
+    user-select: none;
+  }
+  .bp-card:active { cursor: grabbing; }
+  .bp-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,0.15);
+  }
+  .bp-label { font-size: 12px; color: #333; }
+  .bp-rotate {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 3px;
+    background: #eee;
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 18px;
+    padding: 0;
+  }
+  .bp-rotate:hover { background: #ddd; }
+  #bp-bin-wrap {
+    border: 2px solid #333;
+    position: relative;
+    background-color: #fff;
+    background-image:
+      linear-gradient(#eee 1px, transparent 1px),
+      linear-gradient(90deg, #eee 1px, transparent 1px);
+    background-size: 26px 26px;
+    flex-shrink: 0;
+  }
+  #bp-bin { position: relative; width: 100%; height: 100%; }
+  .bp-placed {
+    position: absolute;
+    border: 1px solid white;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    box-sizing: border-box;
+  }
+  .bp-preview {
+    position: absolute;
+    border: 2px dashed #999;
+    border-radius: 2px;
+    pointer-events: none;
+    box-sizing: border-box;
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div id="bp-root">
+    <div id="bp-palette"></div>
+    <div id="bp-bin-wrap"><div id="bp-bin"></div></div>
+  </div>
+
+<script>
+(function () {
+  const CELL = 26;
+
+  function sendValue(value) {
+    window.parent.postMessage(
+      { isStreamlitMessage: true, type: "streamlit:setComponentValue", value: value, dataType: "json" },
+      "*"
+    );
+  }
+
+  function setFrameHeight() {
+    const h = document.getElementById("bp-root").scrollHeight + 8;
+    window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: h }, "*");
+  }
+
+  function render(data) {
+    const binW = data.bin_w;
+    const binH = data.bin_h;
+    const placed = data.placed || [];
+    const items = data.items || [];
+
+    const paletteEl = document.getElementById("bp-palette");
+    const binWrapEl = document.getElementById("bp-bin-wrap");
+    const binEl = document.getElementById("bp-bin");
+
+    binWrapEl.style.width = (binW * CELL) + "px";
+    binWrapEl.style.height = (binH * CELL) + "px";
+
+    paletteEl.innerHTML = "";
+    binEl.innerHTML = "";
+
+    function overlaps(x, y, w, h, excludeId) {
+      if (x < 0 || y < 0 || x + w > binW || y + h > binH) return true;
+      for (const p of placed) {
+        if (p.id === excludeId) continue;
+        if (!(x + w <= p.x || p.x + p.w <= x || y + h <= p.y || p.y + p.h <= y)) return true;
+      }
+      return false;
+    }
+
+    const preview = document.createElement("div");
+    preview.className = "bp-preview";
+
+    let dragItem = null;
+    let dragRotated = false;
+    let dragSource = null; // "palette" | "placed"
+
+    function startDrag(id, w, h, color, rotated, source) {
+      dragItem = { id, w, h, color };
+      dragRotated = rotated;
+      dragSource = source;
+    }
+
+    function makeGhost(e, w, h, color) {
+      const ghost = document.createElement("div");
+      ghost.style.position = "absolute";
+      ghost.style.top = "-1000px";
+      ghost.style.left = "-1000px";
+      ghost.style.width = (w * CELL) + "px";
+      ghost.style.height = (h * CELL) + "px";
+      ghost.style.background = color;
+      ghost.style.border = "1px solid white";
+      ghost.style.opacity = "0.9";
+      document.body.appendChild(ghost);
+      // Anchor the ghost's center on the cursor; dragover/drop below use the
+      // same center-relative math so the drop position matches what's shown.
+      e.dataTransfer.setDragImage(ghost, (w * CELL) / 2, (h * CELL) / 2);
+      setTimeout(() => document.body.removeChild(ghost), 0);
+    }
+
+    placed.forEach((p) => {
+      const el = document.createElement("div");
+      el.className = "bp-placed";
+      el.draggable = true;
+      el.style.left = (p.x * CELL) + "px";
+      el.style.top = (p.y * CELL) + "px";
+      el.style.width = (p.w * CELL) + "px";
+      el.style.height = (p.h * CELL) + "px";
+      el.style.background = p.color;
+      el.style.cursor = "grab";
+      el.textContent = "#" + p.id;
+
+      el.addEventListener("dragstart", (e) => {
+        // dragItem.w/h store BASE (unrotated) dimensions, same convention as
+        // palette items, so the shared rotate/orientation math below works
+        // for both sources. p.w/p.h are the current (already-oriented)
+        // on-screen footprint, so undo that to recover the base size.
+        const baseW = p.rotated ? p.h : p.w;
+        const baseH = p.rotated ? p.w : p.h;
+        startDrag(p.id, baseW, baseH, p.color, p.rotated, "placed");
+        e.dataTransfer.setData("text/plain", String(p.id));
+        e.dataTransfer.effectAllowed = "move";
+        makeGhost(e, p.w, p.h, p.color);
+      });
+      el.addEventListener("dragend", () => {
+        preview.style.display = "none";
+        dragItem = null;
+        dragSource = null;
+      });
+
+      binEl.appendChild(el);
+    });
+
+    binEl.appendChild(preview);
+
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "bp-card";
+      card.draggable = true;
+      card.dataset.rotated = "0";
+      card.title = "Profit: " + item.profit + "  •  Size: " + item.w + "×" + item.h;
+
+      const swatch = document.createElement("div");
+      swatch.className = "bp-swatch";
+      swatch.style.background = item.color;
+
+      const label = document.createElement("div");
+      label.className = "bp-label";
+      label.textContent = "#" + item.id;
+
+      const rotateBtn = document.createElement("button");
+      rotateBtn.className = "bp-rotate";
+      rotateBtn.type = "button";
+      rotateBtn.textContent = "⟳";
+      rotateBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isRotated = card.dataset.rotated === "1";
+        card.dataset.rotated = isRotated ? "0" : "1";
+        const w = isRotated ? item.w : item.h;
+        const h = isRotated ? item.h : item.w;
+        card.title = "Profit: " + item.profit + "  •  Size: " + w + "×" + h +
+          (isRotated ? "" : " (rotated)");
+      };
+
+      card.appendChild(swatch);
+      card.appendChild(label);
+      card.appendChild(rotateBtn);
+
+      card.addEventListener("dragstart", (e) => {
+        const rotated = card.dataset.rotated === "1";
+        const w = rotated ? item.h : item.w;
+        const h = rotated ? item.w : item.h;
+        startDrag(item.id, item.w, item.h, item.color, rotated, "palette");
+        e.dataTransfer.setData("text/plain", String(item.id));
+        e.dataTransfer.effectAllowed = "move";
+        makeGhost(e, w, h, item.color);
+      });
+
+      card.addEventListener("dragend", () => {
+        preview.style.display = "none";
+        dragItem = null;
+        dragSource = null;
+      });
+
+      paletteEl.appendChild(card);
+    });
+
+    // Dropping a placed item back onto the palette removes it from the bin
+    // and returns it to the queue.
+    paletteEl.addEventListener("dragover", (e) => {
+      if (dragSource !== "placed") return;
+      e.preventDefault();
+      paletteEl.style.background = "#eef6ff";
+    });
+
+    paletteEl.addEventListener("dragleave", () => {
+      paletteEl.style.background = "";
+    });
+
+    paletteEl.addEventListener("drop", (e) => {
+      paletteEl.style.background = "";
+      if (dragSource !== "placed" || !dragItem) return;
+      e.preventDefault();
+      sendValue({ source: "placed", remove: true, item_id: dragItem.id, x: 0, y: 0, rotated: false });
+      dragItem = null;
+      dragSource = null;
+    });
+
+    // Cursor tracks the ghost's CENTER (see makeGhost's setDragImage offset),
+    // so the drop anchor (top-left corner) must be computed the same way
+    // here as in the drop handler, or the preview/placement won't line up
+    // with where the ghost visually appeared under the cursor.
+    function cellFromEvent(e, w, h) {
+      const rect = binEl.getBoundingClientRect();
+      const gx = Math.floor((e.clientX - rect.left - (w * CELL) / 2) / CELL);
+      const gy = Math.floor((e.clientY - rect.top - (h * CELL) / 2) / CELL);
+      return [gx, gy];
+    }
+
+    binEl.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!dragItem) return;
+      const w = dragRotated ? dragItem.h : dragItem.w;
+      const h = dragRotated ? dragItem.w : dragItem.h;
+      const [gx, gy] = cellFromEvent(e, w, h);
+      const excludeId = dragSource === "placed" ? dragItem.id : null;
+      const bad = overlaps(gx, gy, w, h, excludeId);
+      preview.style.display = "block";
+      preview.style.left = (gx * CELL) + "px";
+      preview.style.top = (gy * CELL) + "px";
+      preview.style.width = (w * CELL) + "px";
+      preview.style.height = (h * CELL) + "px";
+      preview.style.borderColor = bad ? "#d32f2f" : "#2e7d32";
+    });
+
+    binEl.addEventListener("dragleave", () => {
+      preview.style.display = "none";
+    });
+
+    binEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      preview.style.display = "none";
+      const itemId = e.dataTransfer.getData("text/plain");
+      if (!itemId || !dragItem) return;
+      const rotated = dragRotated;
+      const w = rotated ? dragItem.h : dragItem.w;
+      const h = rotated ? dragItem.w : dragItem.h;
+      const [gx, gy] = cellFromEvent(e, w, h);
+      sendValue({
+        source: dragSource,
+        item_id: parseInt(itemId, 10),
+        x: gx, y: gy, rotated: rotated,
+      });
+      dragItem = null;
+      dragSource = null;
+    });
+
+    setFrameHeight();
+  }
+
+  window.addEventListener("message", (event) => {
+    const msg = event.data;
+    if (!msg || !msg.type) return;
+    if (msg.type === "streamlit:render") {
+      render(msg.args || {});
+    }
+  });
+
+  window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
+  setFrameHeight();
+})();
+</script>
+</body>
+</html>
