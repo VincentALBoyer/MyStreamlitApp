@@ -5,8 +5,8 @@
 # =============================================================================
 import streamlit as st
 import pandas as pd
-from engine.erp_engine import create_manual_po, run_mrp_suggestion, request_quote_manual
-from engine.srm_engine import (
+from Archive.ERP_Sim_Integrated.engine.erp_engine import create_manual_po, run_mrp_suggestion, request_quote_manual
+from Archive.ERP_Sim_Integrated.engine.srm_engine import (
     send_rfq, award_rfq, reject_rfq, create_contract, pay_invoice, 
     get_supplier_scorecard, purchase_from_market
 )
@@ -95,7 +95,7 @@ if not state.srm_enabled:
                             already_sent = any(pr.material_id == mid and pr.day_sent == state.current_day for pr in state.pending_rfqs)
                             
                             if st.button("📧 Send Inquiry", key=f"btn_inq_{mid}", use_container_width=True, disabled=already_sent):
-                                from engine.erp_engine import request_quote_manual
+                                from Archive.ERP_Sim_Integrated.engine.erp_engine import request_quote_manual
                                 ok, msg = request_quote_manual(state, mid, qty_inq)
                                 if ok:
                                     st.toast(f"Inquiry sent for {mat.name}", icon="✉️")
@@ -138,7 +138,7 @@ if not state.srm_enabled:
                             btn_rej = c2.button("❌ Reject", key=f"rej_{comm.id}", use_container_width=True)
                             
                             if btn_acc:
-                                from engine.erp_engine import create_manual_po
+                                from Archive.ERP_Sim_Integrated.engine.erp_engine import create_manual_po
                                 ok, msg = create_manual_po(state, data["supplier_id"], data["material_id"], 
                                                          data["qty"], data["price"], data["lead_time"])
                                 if ok:

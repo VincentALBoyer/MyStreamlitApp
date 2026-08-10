@@ -6,8 +6,8 @@ import streamlit as st
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from engine.erp_engine import init_simulation, advance_day, get_kpis
-from config import COMPANY_NAME, THEME, MODULE_COLORS
+from Archive.ERP_Sim_Integrated.engine.erp_engine import init_simulation, advance_day, get_kpis
+from Archive.ERP_Sim_Integrated.config import COMPANY_NAME, THEME, MODULE_COLORS
 
 st.set_page_config(
     page_title=f"EIS Simulator | {COMPANY_NAME}",
@@ -174,14 +174,14 @@ with st.sidebar:
     # NEXT DAY button
     if not state.game_over:
         if st.button("➡️ ADVANCE DAY", type="primary", use_container_width=True):
-            from engine.srm_engine import update_supplier_prices
+            from Archive.ERP_Sim_Integrated.engine.srm_engine import update_supplier_prices
             update_supplier_prices(state)
             advance_day(state)
             st.rerun()
     else:
         st.error("🏁 Simulation Complete")
         
-        from engine.erp_engine import evaluate_performance
+        from Archive.ERP_Sim_Integrated.engine.erp_engine import evaluate_performance
         perf = evaluate_performance(state)
         
         st.markdown(f"""
@@ -223,7 +223,7 @@ with st.sidebar:
             if new_crm:
                 # Initialize customers if first time
                 if not state.customers:
-                    from engine.crm_engine import init_customers
+                    from Archive.ERP_Sim_Integrated.engine.crm_engine import init_customers
                     init_customers(state)
                 st.toast("✅ CRM Module activated!", icon="📊")
                 state.daily_events.append("⚙️ INSTRUCTOR: CRM module activated")
@@ -235,7 +235,7 @@ with st.sidebar:
         st.html("<div style='color:#94A3B8; font-size:0.75rem; margin-bottom:8px;'>QUICK ACTIONS</div>")
         jump = st.number_input("Advance N days", 1, 30, 1)
         if st.button("⏩ Auto-Run", use_container_width=True):
-            from engine.srm_engine import update_supplier_prices
+            from Archive.ERP_Sim_Integrated.engine.srm_engine import update_supplier_prices
             for _ in range(min(jump, state.max_days - state.current_day + 1)):
                 if not state.game_over:
                     with st.spinner(f"Simulating Day {state.current_day}..."):

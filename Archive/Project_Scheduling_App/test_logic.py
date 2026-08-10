@@ -1,4 +1,4 @@
-from logic import SchedulingLogic
+from Archive.Project_Scheduling_App.logic import SchedulingLogic
 
 def test_logic():
     logic = SchedulingLogic()

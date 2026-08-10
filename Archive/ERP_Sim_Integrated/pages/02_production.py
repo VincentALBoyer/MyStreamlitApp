@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from engine.erp_engine import create_work_order
+from Archive.ERP_Sim_Integrated.engine.erp_engine import create_work_order
 
 if "sim_state" not in st.session_state:
     st.warning("Simulation state not initialized. Please go to the Home page first.")
@@ -21,7 +21,7 @@ st.html("""
 """)
 
 # ── Capacity KPIs ─────────────────────────────────────────────────────────────
-from config import DAILY_CAPACITY_HOURS
+from Archive.ERP_Sim_Integrated.config import DAILY_CAPACITY_HOURS
 active_wos = [wo for wo in state.work_orders if wo.status == "InProgress"]
 backlog_hours = sum(wo.hours_required - wo.hours_completed for wo in active_wos)
 completed_today = [wo for wo in state.work_orders if wo.status == "Completed" and wo.completion_day == state.current_day - 1]
@@ -152,7 +152,7 @@ else:
 st.divider()
 
 # ── MRP Suggestions ────────────────────────────────────────────────────────────
-from engine.erp_engine import run_mrp_suggestion
+from Archive.ERP_Sim_Integrated.engine.erp_engine import run_mrp_suggestion
 st.html("<div class='section-title'>🤖 MRP — Replenishment Suggestions</div>")
 suggestions = run_mrp_suggestion(state)
 if suggestions:

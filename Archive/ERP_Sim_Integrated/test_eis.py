@@ -4,23 +4,23 @@ sys.path.insert(0, '.')
 print('=== EIS Simulator — Engine Tests ===')
 
 print('Testing config...')
-import config
+import Archive.ERP_Sim_Integrated.config as config
 print('  OK: config.py')
 
 print('Testing engine/state...')
-from engine.state import SimState, Material, Product
+from Archive.ERP_Sim_Integrated.engine.state import SimState, Material, Product
 print('  OK: engine/state.py')
 
 print('Testing engine/srm_engine...')
-from engine.srm_engine import init_suppliers
+from Archive.ERP_Sim_Integrated.engine.srm_engine import init_suppliers
 print('  OK: engine/srm_engine.py')
 
 print('Testing engine/crm_engine...')
-from engine.crm_engine import init_customers, generate_new_leads
+from Archive.ERP_Sim_Integrated.engine.crm_engine import init_customers, generate_new_leads
 print('  OK: engine/crm_engine.py')
 
 print('Testing engine/erp_engine...')
-from engine.erp_engine import init_simulation, advance_day, get_kpis, export_activity_log, export_kpi_summary
+from Archive.ERP_Sim_Integrated.engine.erp_engine import init_simulation, advance_day, get_kpis, export_activity_log, export_kpi_summary
 print('  OK: engine/erp_engine.py')
 
 print('')
@@ -29,7 +29,7 @@ state = init_simulation()
 print(f'  Day 1: Cash=${state.cash:.0f}, Materials={len(state.materials)}, Suppliers={len(state.suppliers)}')
 print(f'  Inbox messages: {len(state.inbox)}, Sales orders: {len(state.sales_orders)}')
 
-from engine.srm_engine import update_supplier_prices
+from Archive.ERP_Sim_Integrated.engine.srm_engine import update_supplier_prices
 update_supplier_prices(state)
 advance_day(state)
 print(f'  After Day 1 advance: Day={state.current_day}, Events={len(state.daily_events)}')
@@ -39,7 +39,7 @@ print(f'  KPIs: Cash=${kpis["cash"]:.0f}, Open Orders={kpis["open_orders"]}, OTI
 
 print('')
 print('=== Testing ERP Actions ===')
-from engine.erp_engine import create_work_order, ship_sales_order, create_manual_po, run_mrp_suggestion
+from Archive.ERP_Sim_Integrated.engine.erp_engine import create_work_order, ship_sales_order, create_manual_po, run_mrp_suggestion
 
 # Create production run
 ok, msg = create_work_order(state, 'P01', 5)
@@ -56,7 +56,7 @@ print(f'  MRP suggestions: {len(suggestions)} items')
 print('')
 print('=== Testing SRM ===')
 state.srm_enabled = True
-from engine.srm_engine import send_rfq, award_rfq, create_contract, get_supplier_scorecard
+from Archive.ERP_Sim_Integrated.engine.srm_engine import send_rfq, award_rfq, create_contract, get_supplier_scorecard
 ok, msg, rfq = send_rfq(state, 'M01', 100)
 print(f'  RFQ sent: {ok}, msg={msg}, responses={len(rfq.responses) if rfq else 0}')
 
@@ -74,7 +74,7 @@ state.crm_enabled = True
 init_customers(state)
 print(f'  Customers loaded: {len(state.customers)}')
 
-from engine.crm_engine import run_marketing_campaign, advance_lead_stage, create_service_ticket, resolve_ticket
+from Archive.ERP_Sim_Integrated.engine.crm_engine import run_marketing_campaign, advance_lead_stage, create_service_ticket, resolve_ticket
 ok, msg, leads = run_marketing_campaign(state, 'digital_ads')
 print(f'  Digital ads campaign: {ok}, {msg}')
 
@@ -85,7 +85,7 @@ if state.leads:
 
 print('')
 print('=== Testing New Pedagogical Features ===')
-from engine.erp_engine import evaluate_performance, generate_simulated_log
+from Archive.ERP_Sim_Integrated.engine.erp_engine import evaluate_performance, generate_simulated_log
 
 # Test performance evaluation
 perf = evaluate_performance(state)

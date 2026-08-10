@@ -4,8 +4,8 @@
 # =============================================================================
 import random
 from typing import Tuple, List, Dict, Optional
-from engine.state import SimState, Supplier, RFQ, SupplierInvoice, PurchaseOrder, ActivityLog
-from config import SUPPLIERS_CONFIG, SRM_PARAMS, FINANCIAL_PARAMS
+from Archive.ERP_Sim_Integrated.engine.state import SimState, Supplier, RFQ, SupplierInvoice, PurchaseOrder, ActivityLog
+from Archive.ERP_Sim_Integrated.config import SUPPLIERS_CONFIG, SRM_PARAMS, FINANCIAL_PARAMS
 
 
 # =============================================================================

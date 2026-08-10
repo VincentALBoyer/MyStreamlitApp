@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import logic
+import Archive.CRM_App.logic as logic
 
 # =============================================================================
 # PAGE CONFIGURATION

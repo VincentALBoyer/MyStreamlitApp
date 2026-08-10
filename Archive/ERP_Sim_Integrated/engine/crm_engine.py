@@ -4,8 +4,8 @@
 # =============================================================================
 import random
 from typing import Tuple, List, Optional
-from engine.state import SimState, Lead, Customer, ServiceTicket, SalesOrder, ActivityLog
-from config import CUSTOMERS_CONFIG, CRM_PARAMS
+from Archive.ERP_Sim_Integrated.engine.state import SimState, Lead, Customer, ServiceTicket, SalesOrder, ActivityLog
+from Archive.ERP_Sim_Integrated.config import CUSTOMERS_CONFIG, CRM_PARAMS
 
 
 # =============================================================================

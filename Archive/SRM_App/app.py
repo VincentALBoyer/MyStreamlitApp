@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import logic
+import Archive.SRM_App.logic as logic
 
 st.set_page_config(page_title="SRM | Advanced Sourcing", page_icon="🏭", layout="wide")
 

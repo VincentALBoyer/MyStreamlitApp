@@ -4,7 +4,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from engine.erp_engine import get_kpis, get_income_statement
+from Archive.ERP_Sim_Integrated.engine.erp_engine import get_kpis, get_income_statement
 
 if "sim_state" not in st.session_state:
     st.warning("Simulation state not initialized. Please go to the Home page first.")

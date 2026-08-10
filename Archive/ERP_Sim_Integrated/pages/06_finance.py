@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from engine.erp_engine import get_income_statement, get_kpis
+from Archive.ERP_Sim_Integrated.engine.erp_engine import get_income_statement, get_kpis
 
 if "sim_state" not in st.session_state:
     st.warning("Simulation state not initialized. Please go to the Home page first.")
@@ -122,7 +122,7 @@ with tab_arap:
         st.html("<div class='section-title'>Accounts Receivable (AR)</div>")
         shipped_unpaid = [so for so in state.sales_orders
                           if so.status == "Shipped" and so.shipped_day]
-        from config import FINANCIAL_PARAMS
+        from Archive.ERP_Sim_Integrated.config import FINANCIAL_PARAMS
         ar_rows = []
         total_ar = 0
         for so in shipped_unpaid:

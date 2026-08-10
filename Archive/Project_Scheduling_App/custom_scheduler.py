@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(__file__))
 
-from logic import SchedulingLogic
+from Archive.Project_Scheduling_App.logic import SchedulingLogic
 
 # --- Custom HTML Component for Drag and Drop ---
 def drag_and_drop_scheduler(logic_data):

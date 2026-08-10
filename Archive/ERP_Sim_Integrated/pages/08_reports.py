@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from engine.erp_engine import export_activity_log, export_kpi_summary, get_kpis, get_income_statement
+from Archive.ERP_Sim_Integrated.engine.erp_engine import export_activity_log, export_kpi_summary, get_kpis, get_income_statement
 
 if "sim_state" not in st.session_state:
     st.warning("Simulation state not initialized. Please go to the Home page first.")
@@ -92,7 +92,7 @@ with sim1:
     with st.container(border=True):
         st.markdown("#### ✅ Optimized Operations (High Integration)")
         st.caption("A simulated 30-day log representing a company actively using SRM and CRM modules. Features high revenue and low rework costs.")
-        from engine.erp_engine import generate_simulated_log
+        from Archive.ERP_Sim_Integrated.engine.erp_engine import generate_simulated_log
         csv_opt = generate_simulated_log(scenario="optimized")
         st.download_button("⬇️ Download Optimized Log (CSV)", data=csv_opt, file_name="simulated_log_optimized.csv", mime="text/csv", use_container_width=True)
 
@@ -164,7 +164,7 @@ with tab_srm:
         - ✅ Automated discrepancy alerts
         """)
     else:
-        from engine.srm_engine import get_srm_kpis
+        from Archive.ERP_Sim_Integrated.engine.srm_engine import get_srm_kpis
         srm_kpis_data = get_srm_kpis(state)
         kpi_cols = st.columns(3)
         for i, (name, val) in enumerate(srm_kpis_data.items()):
@@ -211,14 +211,14 @@ with tab_crm:
         - ✅ Win rate and CAC analytics
         """)
     else:
-        from engine.crm_engine import get_crm_kpis
+        from Archive.ERP_Sim_Integrated.engine.crm_engine import get_crm_kpis
         crm_kpis_data = get_crm_kpis(state)
         kpi_cols = st.columns(3)
         for i, (name, val) in enumerate(crm_kpis_data.items()):
             kpi_cols[i % 3].metric(name, val)
 
         # Pipeline stage distribution
-        from engine.crm_engine import STAGE_ORDER
+        from Archive.ERP_Sim_Integrated.engine.crm_engine import STAGE_ORDER
         stage_counts = {s: 0 for s in STAGE_ORDER}
         for l in state.leads:
             stage_counts[l.stage] = stage_counts.get(l.stage, 0) + 1

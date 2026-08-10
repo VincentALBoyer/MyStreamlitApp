@@ -5,8 +5,8 @@
 # =============================================================================
 import streamlit as st
 import pandas as pd
-from engine.erp_engine import ship_sales_order, process_customer_order_manual
-from engine.crm_engine import (advance_lead_stage, run_marketing_campaign,
+from Archive.ERP_Sim_Integrated.engine.erp_engine import ship_sales_order, process_customer_order_manual
+from Archive.ERP_Sim_Integrated.engine.crm_engine import (advance_lead_stage, run_marketing_campaign,
                                  create_service_ticket, resolve_ticket,
                                  compute_customer_health, get_crm_kpis, STAGE_ORDER)
 
@@ -76,7 +76,7 @@ if not state.crm_enabled:
                             btn_rej = c2.button("❌ Reject", key=f"rej_s_{comm.id}", use_container_width=True)
                             
                             if btn_acc:
-                                from engine.erp_engine import process_customer_order_manual
+                                from Archive.ERP_Sim_Integrated.engine.erp_engine import process_customer_order_manual
                                 ok, msg = process_customer_order_manual(state, comm.id)
                                 if ok:
                                     # comm.status is updated inside the engine function

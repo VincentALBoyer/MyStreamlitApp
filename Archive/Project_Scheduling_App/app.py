@@ -5,8 +5,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(__file__))
 
-from logic import SchedulingLogic, Task, Worker
-from custom_scheduler import drag_and_drop_scheduler
+from Archive.Project_Scheduling_App.logic import SchedulingLogic, Task, Worker
+from Archive.Project_Scheduling_App.custom_scheduler import drag_and_drop_scheduler
 import datetime
 
 # --- Page Config ---

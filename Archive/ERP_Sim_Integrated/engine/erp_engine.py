@@ -5,12 +5,12 @@
 import random
 import math
 from typing import Tuple, List, Optional
-from engine.state import (
+from Archive.ERP_Sim_Integrated.engine.state import (
     SimState, Material, Product, SalesOrder, WorkOrder, PurchaseOrder,
     FinancialEntry, InventoryMovement, ActivityLog, EmailMessage, Supplier,
     CommunicationEntry, PendingRFQ, RFQ
 )
-from config import (
+from Archive.ERP_Sim_Integrated.config import (
     MATERIALS_CONFIG, PRODUCTS_CONFIG, SUPPLIERS_CONFIG, CUSTOMERS_CONFIG,
     SIMULATION_DAYS, STARTING_CASH, DAILY_CAPACITY_HOURS,
     DEMAND_PARAMS, PRODUCTION_PARAMS, FINANCIAL_PARAMS, SRM_PARAMS
@@ -46,7 +46,7 @@ def init_simulation() -> SimState:
         )
 
     # Suppliers
-    from engine.srm_engine import init_suppliers
+    from Archive.ERP_Sim_Integrated.engine.srm_engine import init_suppliers
     state.suppliers = init_suppliers()
 
     # Starting inventory — moderate level to start
@@ -98,12 +98,12 @@ def advance_day(state: SimState) -> None:
 
     # 6. Auto-pay SRM invoices if overdue AND SRM is enabled
     if state.srm_enabled:
-        from engine.srm_engine import check_invoice_overdue
+        from Archive.ERP_Sim_Integrated.engine.srm_engine import check_invoice_overdue
         check_invoice_overdue(state)
 
     # 8. CRM daily pipeline advance
     if state.crm_enabled:
-        from engine.crm_engine import advance_crm_pipeline, generate_new_leads
+        from Archive.ERP_Sim_Integrated.engine.crm_engine import advance_crm_pipeline, generate_new_leads
         advance_crm_pipeline(state)
         generate_new_leads(state)
 
@@ -271,7 +271,7 @@ def _generate_daily_demand(state: SimState) -> None:
         DEMAND_PARAMS["daily_orders_max"]
     )
 
-    from config import CUSTOMERS_CONFIG
+    from Archive.ERP_Sim_Integrated.config import CUSTOMERS_CONFIG
     customer_names = [c["name"] for c in CUSTOMERS_CONFIG]
 
     # CRM mode: use actual customer records
@@ -821,12 +821,12 @@ def export_kpi_summary(state: SimState) -> str:
         {"KPI": "Simulation Days Elapsed", "Value": kpis["days_elapsed"], "Module": "Config", "Category": "System"},
     ]
     if state.srm_enabled:
-        from engine.srm_engine import get_srm_kpis
+        from Archive.ERP_Sim_Integrated.engine.srm_engine import get_srm_kpis
         srm = get_srm_kpis(state)
         for k, v in srm.items():
             rows.append({"KPI": k, "Value": v, "Module": "SRM", "Category": "Procurement"})
     if state.crm_enabled:
-        from engine.crm_engine import get_crm_kpis
+        from Archive.ERP_Sim_Integrated.engine.crm_engine import get_crm_kpis
         crm = get_crm_kpis(state)
         for k, v in crm.items():
             rows.append({"KPI": k, "Value": v, "Module": "CRM", "Category": "Sales"})
