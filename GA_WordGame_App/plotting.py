@@ -16,7 +16,7 @@ COLOR_AVG = "#eb6834"      # categorical slot 2 - secondary metric
 COLOR_TARGET = "#c3c2b7"   # muted reference line - not a data series
 
 
-def build_fitness_chart(history: list, target_fitness: int):
+def build_fitness_chart(history: list, target_fitness: int, y_label: str = "Fitness (letters correct)"):
     generations = [h["generation"] for h in history]
     best = [h["best"] for h in history]
     avg = [h["avg"] for h in history]
@@ -39,7 +39,7 @@ def build_fitness_chart(history: list, target_fitness: int):
     ))
 
     fig.update_xaxes(title="Generation", dtick=1, zeroline=False, tickfont=dict(size=10))
-    fig.update_yaxes(title="Fitness (letters correct)", range=[-0.3, target_fitness + 0.6], dtick=1, zeroline=False)
+    fig.update_yaxes(title=y_label, range=[-0.3, target_fitness + 0.6], dtick=1, zeroline=False)
     fig.update_layout(
         height=300,
         margin=dict(l=10, r=10, t=10, b=10),

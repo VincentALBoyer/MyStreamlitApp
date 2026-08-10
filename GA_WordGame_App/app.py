@@ -15,9 +15,17 @@ CONCEPTS = [
     (
         "Gene, Chromosome & Fitness",
         "A **gene** is one letter; a **chromosome** is a full candidate word. **Fitness** "
-        "counts letters that are correct *and* in the right position - there's no partial "
-        "credit for a right letter in the wrong slot, so the population only learns from "
-        "that single number each round.",
+        "scores how close a candidate is to the hidden word - the population only learns "
+        "from that single number each round, never the letters themselves.",
+    ),
+    (
+        "Scoring: Exact vs. Partial Credit",
+        "**Exact match** only rewards letters in the exact right spot, so a word with every "
+        "letter right but shifted by one position scores 0 - a harsh, deceptive fitness "
+        "landscape. **Partial credit** also rewards wrong letters that are merely close "
+        "alphabetically, giving the GA a smoother slope to climb instead of scattered cliffs. "
+        "This is a real lesson in GA design: how you score a solution shapes how easily "
+        "evolution can find it.",
     ),
     (
         "Selection: Choosing Parents",
@@ -59,9 +67,11 @@ CONCEPTS = [
 def init_state():
     defaults = {
         "phase": "setup",
+        "game_id": 0,
         "hidden_word": "",
         "word_length": 6,
         "pop_size": 6,
+        "scoring_mode": "exact",
         "rng": None,
         "population": [],
         "round_idx": 0,
@@ -73,20 +83,50 @@ def init_state():
         "found_generation": None,
         "stopped_manually": False,
         "start_time": None,
+        "best_word": None,
+        "best_fitness": None,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
 
 
-def start_game(word: str, pop_size: int, code: str):
+def score(word: str) -> float:
+    """Fitness of `word` under the game's currently selected scoring mode."""
+    return gl.compute_fitness(word, st.session_state.hidden_word, st.session_state.scoring_mode)
+
+
+def fmt_score(v: float) -> str:
+    """Whole numbers for exact-match scoring; 2 decimals for partial credit."""
+    return f"{v:.2f}" if st.session_state.scoring_mode == "partial" else f"{int(round(v))}"
+
+
+def update_best(word: str):
+    """Tracks the best-fitness individual seen all game, across every
+    population and offspring pool - not just whoever survives selection."""
+    fit_val = score(word)
+    if st.session_state.best_fitness is None or fit_val > st.session_state.best_fitness:
+        st.session_state.best_word = word
+        st.session_state.best_fitness = fit_val
+
+
+def start_game(word: str, pop_size: int, code: str, scoring_mode: str):
     rng = gl.make_rng(code)
     population = gl.random_population(pop_size, len(word), rng)
-    stats = gl.population_stats(population, word)
+    population.sort(key=lambda w: -gl.compute_fitness(w, word, scoring_mode))
+    stats = gl.population_stats(population, word, mode=scoring_mode)
+
+    # Bump game_id so every widget key derived from it (parent/mutation
+    # selections, survivor checkboxes) starts fresh - round_idx and pair_no
+    # both reset to 0 on a new game, and without this a leftover selection
+    # from the previous game would reappear pre-checked.
+    game_id = st.session_state.get("game_id", 0) + 1
 
     st.session_state.update({
+        "game_id": game_id,
         "hidden_word": word,
         "word_length": len(word),
         "pop_size": pop_size,
+        "scoring_mode": scoring_mode,
         "rng": rng,
         "population": population,
         "round_idx": 0,
@@ -99,9 +139,13 @@ def start_game(word: str, pop_size: int, code: str):
         "stopped_manually": False,
         "start_time": time.time(),
         "phase": "breeding",
+        "best_word": None,
+        "best_fitness": None,
     })
+    for w in population:
+        update_best(w)
 
-    winner = next((w for w in population if gl.fitness(w, word) == len(word)), None)
+    winner = next((w for w in population if score(w) == len(word)), None)
     if winner:
         st.session_state.found = True
         st.session_state.winning_word = winner
@@ -137,7 +181,6 @@ def randomize_mutation(key: str, length: int):
 
 
 def commit_pair(a_idx: int, b_idx: int, cut: int, mutate_positions1: list, mutate_positions2: list):
-    hidden = st.session_state.hidden_word
     rng = st.session_state.rng
     pop = st.session_state.population
     child1, child2 = gl.crossover(pop[a_idx], pop[b_idx], cut)
@@ -149,8 +192,9 @@ def commit_pair(a_idx: int, b_idx: int, cut: int, mutate_positions1: list, mutat
 
     for word, mutated in ((child1, set(mutate_positions1)), (child2, set(mutate_positions2))):
         st.session_state.offspring.append({
-            "word": word, "fitness": gl.fitness(word, hidden), "mutated": mutated,
+            "word": word, "fitness": score(word), "mutated": mutated,
         })
+        update_best(word)
     st.session_state.total_evaluations += 2
 
     gen = st.session_state.round_idx + 1
@@ -172,14 +216,14 @@ def undo_last_pair():
 
 
 def auto_select_best():
-    hidden = st.session_state.hidden_word
+    game_id = st.session_state.game_id
     round_idx = st.session_state.round_idx
     pop_size = st.session_state.pop_size
 
     # source rank 0 = offspring, 1 = population - sorting on it after fitness
     # means offspring wins any fitness tie at the pop_size cutoff.
-    candidates = [(f"selpop_{round_idx}_{i}", gl.fitness(w, hidden), 1) for i, w in enumerate(st.session_state.population)]
-    candidates += [(f"seloff_{round_idx}_{i}", o["fitness"], 0) for i, o in enumerate(st.session_state.offspring)]
+    candidates = [(f"selpop_{game_id}_{round_idx}_{i}", score(w), 1) for i, w in enumerate(st.session_state.population)]
+    candidates += [(f"seloff_{game_id}_{round_idx}_{i}", o["fitness"], 0) for i, o in enumerate(st.session_state.offspring)]
     candidates.sort(key=lambda t: (-t[1], t[2]))
     keep = {k for k, _, _ in candidates[:pop_size]}
     for k, _, _ in candidates:
@@ -187,19 +231,19 @@ def auto_select_best():
 
 
 def clear_selection():
+    game_id = st.session_state.game_id
     round_idx = st.session_state.round_idx
     for i in range(len(st.session_state.population)):
-        st.session_state[f"selpop_{round_idx}_{i}"] = False
+        st.session_state[f"selpop_{game_id}_{round_idx}_{i}"] = False
     for i in range(len(st.session_state.offspring)):
-        st.session_state[f"seloff_{round_idx}_{i}"] = False
+        st.session_state[f"seloff_{game_id}_{round_idx}_{i}"] = False
 
 
 def confirm_selection(chosen_words: list):
-    hidden = st.session_state.hidden_word
     gen = st.session_state.round_idx + 1
-    fits = [gl.fitness(w, hidden) for w in chosen_words]
+    fits = [score(w) for w in chosen_words]
     st.session_state.history.append({"generation": gen, "best": max(fits), "avg": sum(fits) / len(fits)})
-    st.session_state.population = sorted(chosen_words, key=lambda w: -gl.fitness(w, hidden))
+    st.session_state.population = sorted(chosen_words, key=lambda w: -score(w))
     st.session_state.round_idx = gen
     st.session_state.offspring = []
     st.session_state.phase = "breeding"
@@ -240,6 +284,7 @@ def render_status_bar():
 
     cols = st.columns([2.2, 1, 1, 1])
     cols[0].subheader(f"Generation {gen} — {label}")
+    cols[0].caption(f"Scoring: {gl.SCORING_LABELS[st.session_state.scoring_mode]}")
     cols[1].metric("Population size", st.session_state.pop_size)
     cols[2].metric("Target fitness", L)
     cols[3].metric("Elapsed", f"{time.time() - st.session_state.start_time:.0f}s")
@@ -252,9 +297,8 @@ def render_setup():
     st.markdown(
         "Enter a secret word below. You'll then run a tiny genetic algorithm **by hand**: pick "
         "parents, choose where to cut for crossover, and decide which gene to mutate, evolving "
-        "a population of random words until one matches. Fitness is just the number of letters "
-        "correct **and in the right position** - no other hints are given, just like the "
-        "in-class activity."
+        "a population of random words until one matches. Fitness alone is your feedback - no "
+        "other hints are given, just like the in-class activity."
     )
 
     raw_word = st.text_input(
@@ -264,6 +308,15 @@ def render_setup():
     pop_size = st.radio(
         "Population size (kept even for clean parent pairing)", gl.POP_SIZE_CHOICES, index=1, horizontal=True,
     )
+    scoring_choice = st.radio(
+        "Scoring method", list(gl.SCORING_LABELS.values()), index=0, horizontal=True,
+        help="**Exact match**: 1 point only for a letter in the exact right spot - the classic "
+             "version, where a near-miss word can score 0. **Partial credit**: wrong letters still "
+             "earn a fractional point based on how close they are alphabetically to the correct "
+             "letter (e.g. guessing S for R is close; guessing Z for A is not) - a smoother fitness "
+             "landscape for the GA to climb.",
+    )
+    scoring_mode = {v: k for k, v in gl.SCORING_LABELS.items()}[scoring_choice]
     code = st.text_input(
         "Random seed / class code (optional)", value="", placeholder="Leave blank for a random start population",
         help="Use the same code as a classmate to start from the exact same random population.",
@@ -274,39 +327,39 @@ def render_setup():
         if not (gl.MIN_WORD_LEN <= len(word) <= gl.MAX_WORD_LEN):
             st.error(f"Enter a hidden word between {gl.MIN_WORD_LEN} and {gl.MAX_WORD_LEN} letters (letters only).")
         else:
-            start_game(word, pop_size, code)
+            start_game(word, pop_size, code, scoring_mode)
             st.rerun()
 
 
 def render_breeding():
-    hidden = st.session_state.hidden_word
     L = st.session_state.word_length
     pop = st.session_state.population
     offspring = st.session_state.offspring
     pop_size = st.session_state.pop_size
     round_idx = st.session_state.round_idx
     pair_no = len(offspring) // 2
+    game_id = st.session_state.game_id
 
     left, right = st.columns([0.42, 0.58])
 
-    order_key = f"parent_order_{round_idx}_{pair_no}"
+    order_key = f"parent_order_{game_id}_{round_idx}_{pair_no}"
     selected_parents = st.session_state.get(order_key, [])
 
     with left:
         st.markdown("**Current Population**")
         st.caption("Click a member's M# to select it as a parent.")
         for i, w in enumerate(pop):
-            fit = gl.fitness(w, hidden)
+            fit_val = score(w)
             c0, c1, c2 = st.columns([0.16, 0.56, 0.28])
             is_selected = i in selected_parents
             if c0.button(
-                f"M{i + 1}", key=f"parent_btn_{round_idx}_{pair_no}_{i}",
+                f"M{i + 1}", key=f"parent_btn_{game_id}_{round_idx}_{pair_no}_{i}",
                 type="primary" if is_selected else "secondary", width="stretch",
             ):
                 toggle_parent(i, order_key)
                 st.rerun()
             c1.markdown(word_tiles_html(w, size=26), unsafe_allow_html=True)
-            c2.markdown(f"Fitness **{fit}/{L}**")
+            c2.markdown(f"Fitness **{fmt_score(fit_val)}/{L}**")
 
         st.caption(f"Offspring created: {len(offspring)} / {pop_size}")
         st.progress(len(offspring) / pop_size)
@@ -316,7 +369,7 @@ def render_breeding():
             for i, o in enumerate(offspring):
                 c1, c2 = st.columns([0.72, 0.28])
                 c1.markdown(f"**C{i + 1}** &nbsp; " + word_tiles_html(o["word"], mutated=o["mutated"], size=26), unsafe_allow_html=True)
-                c2.markdown(f"Fitness **{o['fitness']}/{L}**")
+                c2.markdown(f"Fitness **{fmt_score(o['fitness'])}/{L}**")
             if st.button("↺ Undo last pair"):
                 undo_last_pair()
                 st.rerun()
@@ -330,7 +383,7 @@ def render_breeding():
 
         a_idx, b_idx = sorted(selected_parents)
         cut = st.slider(
-            "Crossover cut position", 1, L - 1, L // 2, key=f"cutpos_{round_idx}_{pair_no}",
+            "Crossover cut position", 1, L - 1, L // 2, key=f"cutpos_{game_id}_{round_idx}_{pair_no}",
             help="Child 1 takes letters 1..cut from Parent A then the rest from Parent B. Child 2 gets the opposite split.",
         )
         child1, child2 = gl.crossover(pop[a_idx], pop[b_idx], cut)
@@ -343,9 +396,9 @@ def render_breeding():
         mc1, mc2 = st.columns(2)
         with mc1:
             f1a, f1b = st.columns([0.72, 0.28])
-            f1a.markdown(f"Child 1 &nbsp; fitness **{gl.fitness(child1, hidden)}/{L}**")
-            mut1_key = f"mut1_pills_{round_idx}_{pair_no}"
-            if f1b.button("\U0001f3b2", key=f"rand1_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
+            f1a.markdown(f"Child 1 &nbsp; fitness **{fmt_score(score(child1))}/{L}**")
+            mut1_key = f"mut1_pills_{game_id}_{round_idx}_{pair_no}"
+            if f1b.button("\U0001f3b2", key=f"rand1_{game_id}_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
                 randomize_mutation(mut1_key, L)
                 st.rerun()
             mut_pos1 = st.pills(
@@ -354,9 +407,9 @@ def render_breeding():
             ) or []
         with mc2:
             f2a, f2b = st.columns([0.72, 0.28])
-            f2a.markdown(f"Child 2 &nbsp; fitness **{gl.fitness(child2, hidden)}/{L}**")
-            mut2_key = f"mut2_pills_{round_idx}_{pair_no}"
-            if f2b.button("\U0001f3b2", key=f"rand2_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
+            f2a.markdown(f"Child 2 &nbsp; fitness **{fmt_score(score(child2))}/{L}**")
+            mut2_key = f"mut2_pills_{game_id}_{round_idx}_{pair_no}"
+            if f2b.button("\U0001f3b2", key=f"rand2_{game_id}_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
                 randomize_mutation(mut2_key, L)
                 st.rerun()
             mut_pos2 = st.pills(
@@ -371,12 +424,12 @@ def render_breeding():
 
 
 def render_selection():
-    hidden = st.session_state.hidden_word
     L = st.session_state.word_length
     pop = st.session_state.population
     offspring = st.session_state.offspring
     pop_size = st.session_state.pop_size
     round_idx = st.session_state.round_idx
+    game_id = st.session_state.game_id
 
     st.info(f"Offspring pool complete! Select exactly **{pop_size}** individuals to carry into the next generation.")
 
@@ -385,11 +438,11 @@ def render_selection():
     with left:
         st.markdown("**Current Population**")
         for i, w in enumerate(pop):
-            fit = gl.fitness(w, hidden)
+            fit_val = score(w)
             c1, c2, c3 = st.columns([0.12, 0.58, 0.3])
-            checked = c1.checkbox("keep", key=f"selpop_{round_idx}_{i}", label_visibility="collapsed")
+            checked = c1.checkbox("keep", key=f"selpop_{game_id}_{round_idx}_{i}", label_visibility="collapsed")
             c2.markdown(f"**M{i + 1}** &nbsp; " + word_tiles_html(w, size=22), unsafe_allow_html=True)
-            c3.markdown(f"**{fit}/{L}**")
+            c3.markdown(f"**{fmt_score(fit_val)}/{L}**")
             pop_checked.append(checked)
 
     off_checked = []
@@ -397,9 +450,9 @@ def render_selection():
         st.markdown("**Offspring**")
         for i, o in enumerate(offspring):
             c1, c2, c3 = st.columns([0.12, 0.58, 0.3])
-            checked = c1.checkbox("keep", key=f"seloff_{round_idx}_{i}", label_visibility="collapsed")
+            checked = c1.checkbox("keep", key=f"seloff_{game_id}_{round_idx}_{i}", label_visibility="collapsed")
             c2.markdown(f"**C{i + 1}** &nbsp; " + word_tiles_html(o["word"], size=22), unsafe_allow_html=True)
-            c3.markdown(f"**{o['fitness']}/{L}**")
+            c3.markdown(f"**{fmt_score(o['fitness'])}/{L}**")
             off_checked.append(checked)
 
     n_selected = sum(pop_checked) + sum(off_checked)
@@ -424,27 +477,37 @@ def render_finished():
         st.balloons()
     else:
         st.info(f"Game stopped. The hidden word was **{hidden}**.")
+        st.markdown(
+            "Best candidate found: " + word_tiles_html(st.session_state.best_word, size=28) +
+            f" &nbsp; fitness **{fmt_score(st.session_state.best_fitness)}/{L}**",
+            unsafe_allow_html=True,
+        )
 
     best_ever = max(h["best"] for h in st.session_state.history)
     generations_played = st.session_state.found_generation if st.session_state.found else st.session_state.round_idx
     elapsed = time.time() - st.session_state.start_time
 
+    partial = st.session_state.scoring_mode == "partial"
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Generations played", generations_played)
-    c2.metric("Best fitness reached", f"{best_ever} / {L}")
+    c2.metric("Best fitness reached", f"{fmt_score(best_ever)} / {L}")
     c3.metric("Individuals evaluated", st.session_state.total_evaluations)
     c4.metric("Total time", f"{elapsed:.0f}s")
+    st.caption(f"Scoring method: {gl.SCORING_LABELS[st.session_state.scoring_mode]}")
 
-    st.plotly_chart(pl.build_fitness_chart(st.session_state.history, L), width="stretch", key="fitness_chart")
+    y_label = "Fitness (partial credit)" if partial else "Fitness (letters correct)"
+    st.plotly_chart(pl.build_fitness_chart(st.session_state.history, L, y_label=y_label), width="stretch", key="fitness_chart")
 
     df = pd.DataFrame(st.session_state.history)
     df.columns = ["Generation", "Best fitness", "Average fitness"]
     df["Average fitness"] = df["Average fitness"].round(2)
+    df["Best fitness"] = df["Best fitness"].round(2) if partial else df["Best fitness"].round(0).astype(int)
     st.dataframe(df, width="stretch", hide_index=True)
 
     b1, b2 = st.columns(2)
     if b1.button("\U0001f501 Play Again (same word)", width="stretch"):
-        start_game(hidden, st.session_state.pop_size, "")
+        start_game(hidden, st.session_state.pop_size, "", st.session_state.scoring_mode)
         st.rerun()
     if b2.button("\U0001f195 New Game", width="stretch"):
         st.session_state.phase = "setup"
@@ -460,7 +523,7 @@ with st.sidebar:
     st.markdown("### \U0001f9ec GA Word Game")
     if st.session_state.phase != "setup":
         st.divider()
-        st.metric("Best fitness so far", f"{max(h['best'] for h in st.session_state.history)} / {st.session_state.word_length}")
+        st.metric("Best fitness so far", f"{fmt_score(max(h['best'] for h in st.session_state.history))} / {st.session_state.word_length}")
         if st.session_state.phase in ("breeding", "selection"):
             if st.button("⏹ Stop Game", width="stretch"):
                 stop_game()

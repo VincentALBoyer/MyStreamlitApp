@@ -3,8 +3,17 @@
 A Streamlit companion for **IN2041 - Metaheuristics**, built around the
 *"Genetic Algorithm: The Word Game"* in-class activity
 (`GA_WordGame.tex`): discover a hidden word by hand-running a tiny genetic
-algorithm - gene = one letter, chromosome = a candidate word, fitness =
-letters correct **and** in the right position.
+algorithm - gene = one letter, chromosome = a candidate word.
+
+Two fitness functions are selectable at setup, to illustrate how scoring
+design shapes a GA's search:
+- **Exact match (classic)** - the slide's original rule: 1 point only for a
+  letter in the exact right position. A near-miss word (right letters,
+  wrong order) can score 0 - a harsh, deceptive landscape.
+- **Partial credit (alphabet distance)** - wrong letters still earn a
+  fractional point based on how close they are alphabetically to the
+  correct letter, giving the GA a smoother slope to climb. Only a perfect
+  match ever reaches the full score.
 
 Unlike the worksheet's slide deck, every GA decision here is made by the
 player, not by chance: **you** click the parents, **you** pick the crossover
@@ -14,9 +23,9 @@ only feedback you get - no letter-by-letter hints.
 
 ## How it plays
 
-1. **Setup** - type a secret word (kept masked) and pick a population size
-   (4, 6, or 8 - always even, so parent pairs divide it evenly). An initial
-   population of random words is generated.
+1. **Setup** - type a secret word (kept masked), pick a population size
+   (4, 6, or 8 - always even, so parent pairs divide it evenly), and pick a
+   scoring method. An initial population of random words is generated.
 2. **Breeding** - each round, repeatedly:
    - click **2 members** of the population to select them as parents (a 3rd
      click auto-deselects the oldest pick, keeping the most recent 2),

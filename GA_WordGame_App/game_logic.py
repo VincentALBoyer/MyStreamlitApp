@@ -15,10 +15,17 @@ import random
 import string
 
 ALPHABET = string.ascii_uppercase
+MAX_LETTER_DISTANCE = len(ALPHABET) - 1  # 25 - the A<->Z gap, the worst possible mismatch
 
 POP_SIZE_CHOICES = [4, 6, 8]  # kept even so parent pairs divide the population evenly
 MIN_WORD_LEN = 4
 MAX_WORD_LEN = 8
+
+SCORING_MODES = ["exact", "partial"]
+SCORING_LABELS = {
+    "exact": "Exact match (classic)",
+    "partial": "Partial credit (alphabet distance)",
+}
 
 
 def new_game_code() -> str:
@@ -59,6 +66,28 @@ def fitness(word: str, hidden: str) -> int:
     return sum(1 for a, b in zip(word, hidden) if a == b)
 
 
+def letter_closeness(a: str, b: str) -> float:
+    """1.0 for an exact match; otherwise how close the two letters are in
+    the alphabet, scaled so the worst possible mismatch (A vs Z) scores 0."""
+    if a == b:
+        return 1.0
+    return 1.0 - abs(ord(a) - ord(b)) / MAX_LETTER_DISTANCE
+
+
+def fitness_partial(word: str, hidden: str) -> float:
+    """Alternative fitness: every position contributes a fractional point
+    based on alphabetical closeness rather than an all-or-nothing match.
+    Only a perfect match sums to len(hidden), since every mismatch scores
+    strictly less than 1 - so the "found" condition still works unchanged."""
+    return sum(letter_closeness(a, b) for a, b in zip(word, hidden))
+
+
+def compute_fitness(word: str, hidden: str, mode: str = "exact") -> float:
+    if mode == "partial":
+        return fitness_partial(word, hidden)
+    return float(fitness(word, hidden))
+
+
 def crossover(parent_a: str, parent_b: str, cut: int) -> tuple:
     """Single-point crossover: cut is how many letters child 1 takes from
     parent A's head (1 <= cut <= len-1) before swapping tails."""
@@ -74,6 +103,6 @@ def mutate(word: str, position: int, rng: random.Random) -> str:
     return word[:position] + new_letter + word[position + 1:]
 
 
-def population_stats(words: list, hidden: str) -> dict:
-    fits = [fitness(w, hidden) for w in words]
+def population_stats(words: list, hidden: str, mode: str = "exact") -> dict:
+    fits = [compute_fitness(w, hidden, mode) for w in words]
     return {"best": max(fits), "avg": sum(fits) / len(fits), "fits": fits}

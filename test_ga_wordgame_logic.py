@@ -100,6 +100,57 @@ def test_random_individual_and_population_shapes():
     print("   - Lengths and alphabet constraints hold.")
 
 
+def test_letter_closeness():
+    print("11. letter_closeness is 1.0 on a match, 0.0 on the worst mismatch...")
+    assert gl.letter_closeness("A", "A") == 1.0
+    assert gl.letter_closeness("A", "Z") == 0.0
+    assert gl.letter_closeness("Z", "A") == 0.0
+    print("   - Exact match and A<->Z extremes confirmed.")
+
+    print("12. letter_closeness decreases smoothly with alphabet distance...")
+    close = gl.letter_closeness("A", "B")   # distance 1
+    far = gl.letter_closeness("A", "M")     # distance 12
+    assert 0.0 < far < close < 1.0
+    assert abs(close - (1 - 1 / 25)) < 1e-9
+    print(f"   - closeness(A,B)={close:.3f} > closeness(A,M)={far:.3f}, both strictly between 0 and 1.")
+
+
+def test_fitness_partial_matches_only_on_perfect_word():
+    print("13. fitness_partial: a near-miss (shifted letters) still scores above 0...")
+    exact = gl.fitness("TENALP", "PLANET")  # all letters right, all positions wrong
+    partial = gl.fitness_partial("TENALP", "PLANET")
+    assert exact == 0
+    assert partial > 0
+    print(f"   - exact fitness={exact}, partial fitness={partial:.2f} (rewards near letters where exact gives nothing).")
+
+    print("14. fitness_partial only reaches len(hidden) on a perfect match...")
+    hidden = "PLANET"
+    assert gl.fitness_partial(hidden, hidden) == len(hidden)
+    for candidate in ["PLAZET", "ZZZZZZ", "QLANET"]:
+        assert gl.fitness_partial(candidate, hidden) < len(hidden)
+    print("   - Only the exact word sums to a full score; every mismatch scores strictly less.")
+
+
+def test_compute_fitness_dispatches_by_mode():
+    print("15. compute_fitness dispatches to the right scoring function...")
+    word, hidden = "PLAZET", "PLANET"
+    assert gl.compute_fitness(word, hidden, "exact") == float(gl.fitness(word, hidden))
+    assert gl.compute_fitness(word, hidden, "partial") == gl.fitness_partial(word, hidden)
+    assert gl.compute_fitness(word, hidden) == gl.compute_fitness(word, hidden, "exact")  # default mode
+    print("   - 'exact' and 'partial' modes match their dedicated functions; default is 'exact'.")
+
+
+def test_population_stats_supports_partial_mode():
+    print("16. population_stats accepts a scoring mode and stays consistent with compute_fitness...")
+    words = ["PLANET", "TENALP", "ZZZZZZ"]
+    hidden = "PLANET"
+    stats = gl.population_stats(words, hidden, mode="partial")
+    expected = [gl.compute_fitness(w, hidden, "partial") for w in words]
+    assert stats["fits"] == expected
+    assert stats["best"] == max(expected)
+    print(f"   - partial-mode stats match compute_fitness for each word: {[round(f, 2) for f in expected]}.")
+
+
 if __name__ == "__main__":
     test_seeding_is_reproducible()
     test_clean_hidden_word()
@@ -108,4 +159,8 @@ if __name__ == "__main__":
     test_mutate_always_changes_the_letter()
     test_population_stats()
     test_random_individual_and_population_shapes()
+    test_letter_closeness()
+    test_fitness_partial_matches_only_on_perfect_word()
+    test_compute_fitness_dispatches_by_mode()
+    test_population_stats_supports_partial_mode()
     print("\nAll game_logic tests passed.")
