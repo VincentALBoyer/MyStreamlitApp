@@ -151,6 +151,43 @@ def test_population_stats_supports_partial_mode():
     print(f"   - partial-mode stats match compute_fitness for each word: {[round(f, 2) for f in expected]}.")
 
 
+def test_auto_run_generation_shapes_and_determinism():
+    print("17. auto_run_generation returns correctly-sized offspring and next population...")
+    hidden = "PLANET"
+    rng = gl.make_rng("AUTOPLAY")
+    population = gl.random_population(6, len(hidden), rng)
+    result = gl.auto_run_generation(population, hidden, pop_size=6, mode="exact", rng=rng)
+    assert len(result["offspring"]) == 6  # pop_size // 2 pairs -> 2 children each
+    assert len(result["population"]) == 6
+    assert all(len(w) == len(hidden) for w in result["population"])
+    assert all(set(w) <= set(gl.ALPHABET) for w in result["population"])
+    print(f"   - offspring pool size={len(result['offspring'])}, next population size={len(result['population'])}.")
+
+    print("18. auto_run_generation is deterministic for a given rng state...")
+    rng_a = gl.make_rng("REPLAY")
+    pop_a = gl.random_population(6, len(hidden), rng_a)
+    result_a = gl.auto_run_generation(pop_a, hidden, pop_size=6, mode="exact", rng=rng_a)
+
+    rng_b = gl.make_rng("REPLAY")
+    pop_b = gl.random_population(6, len(hidden), rng_b)
+    result_b = gl.auto_run_generation(pop_b, hidden, pop_size=6, mode="exact", rng=rng_b)
+    assert result_a["population"] == result_b["population"]
+    print("   - Same seeded rng -> identical next generation.")
+
+
+def test_auto_run_generation_never_loses_the_best_individual():
+    print("19. auto_run_generation's elitist selection never drops the best-known individual...")
+    hidden = "PLANET"
+    rng = gl.make_rng("ELITISM-CHECK")
+    for _ in range(20):
+        population = gl.random_population(6, len(hidden), rng)
+        result = gl.auto_run_generation(population, hidden, pop_size=6, mode="exact", rng=rng)
+        best_before = max(gl.compute_fitness(w, hidden) for w in population + [o["word"] for o in result["offspring"]])
+        best_after = max(gl.compute_fitness(w, hidden) for w in result["population"])
+        assert best_after == best_before
+    print("   - Best fitness never regresses across 20 sampled generations.")
+
+
 if __name__ == "__main__":
     test_seeding_is_reproducible()
     test_clean_hidden_word()
@@ -163,4 +200,6 @@ if __name__ == "__main__":
     test_fitness_partial_matches_only_on_perfect_word()
     test_compute_fitness_dispatches_by_mode()
     test_population_stats_supports_partial_mode()
+    test_auto_run_generation_shapes_and_determinism()
+    test_auto_run_generation_never_loses_the_best_individual()
     print("\nAll game_logic tests passed.")

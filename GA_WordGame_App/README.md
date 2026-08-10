@@ -40,8 +40,16 @@ only feedback you get - no letter-by-letter hints.
    compare pure elitism against your own manual picks.
 4. Repeat until an individual's fitness matches the word length, or stop
    manually at any time.
-5. **Report** - reveals the hidden word and plots best/average fitness per
-   generation, plus total evaluations and elapsed time.
+5. **Report** - reveals the hidden word (and, if not found, the best
+   candidate seen all game) and plots best/average fitness per generation,
+   plus total evaluations and elapsed time.
+
+At the start of any generation, an **Auto-Play** panel lets the GA play
+itself for a chosen number of generations (capped at 20 per run) - fitness-
+weighted parent selection, a random crossover cut, dice-roll mutation, and
+elitist survivor selection, pausing briefly between steps so you can watch
+it converge instead of jumping straight to the result. It stops early the
+moment the hidden word is found.
 
 ## Run it
 

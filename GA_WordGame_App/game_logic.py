@@ -27,6 +27,8 @@ SCORING_LABELS = {
     "partial": "Partial credit (alphabet distance)",
 }
 
+MAX_AUTOPLAY_GENERATIONS = 20  # keeps a single auto-play run bounded and short
+
 
 def new_game_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -106,3 +108,42 @@ def mutate(word: str, position: int, rng: random.Random) -> str:
 def population_stats(words: list, hidden: str, mode: str = "exact") -> dict:
     fits = [compute_fitness(w, hidden, mode) for w in words]
     return {"best": max(fits), "avg": sum(fits) / len(fits), "fits": fits}
+
+
+def auto_run_generation(population: list, hidden: str, pop_size: int, mode: str, rng: random.Random) -> dict:
+    """Plays one full generation with no human input, for the "watch the GA
+    play itself" auto-play mode: fitness-weighted parent selection (higher
+    fitness = more likely to breed, like a roulette-wheel selection), a
+    random single-point crossover, per-gene mutation at ~1/length odds
+    (matching the manual game's dice-roll button), then elitist survivor
+    selection - the best pop_size individuals from parents + offspring
+    combined, with offspring winning any fitness tie (same convention as the
+    manual "auto-select best" shortcut).
+
+    Returns {"offspring": [...], "population": [...]} - the offspring pool
+    (each entry has word/fitness/mutated, for display) and the resulting
+    next-generation population, sorted best-first.
+    """
+    length = len(hidden)
+    pop_fits = [compute_fitness(w, hidden, mode) for w in population]
+    weights = [f + 1e-6 for f in pop_fits]  # avoid an all-zero weight vector
+
+    offspring = []
+    for _ in range(pop_size // 2):
+        parent_a, parent_b = rng.choices(population, weights=weights, k=2)
+        cut = rng.randint(1, length - 1)
+        for child in crossover(parent_a, parent_b, cut):
+            mutated_positions = [i for i in range(length) if rng.random() < 1.0 / length]
+            for pos in mutated_positions:
+                child = mutate(child, pos, rng)
+            offspring.append({
+                "word": child, "fitness": compute_fitness(child, hidden, mode),
+                "mutated": set(mutated_positions),
+            })
+
+    candidates = [(w, pop_fits[i], 1) for i, w in enumerate(population)]
+    candidates += [(o["word"], o["fitness"], 0) for o in offspring]
+    candidates.sort(key=lambda t: (-t[1], t[2]))
+    new_population = sorted((w for w, _, _ in candidates[:pop_size]), key=lambda w: -compute_fitness(w, hidden, mode))
+
+    return {"offspring": offspring, "population": new_population}

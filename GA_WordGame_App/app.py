@@ -249,6 +249,67 @@ def confirm_selection(chosen_words: list):
     st.session_state.phase = "breeding"
 
 
+def auto_play(n_generations: int, delay: float = 0.7):
+    """Plays generations with no human input, pausing to redraw the board so
+    the user can watch each one happen instead of jumping to the end.
+    Stops early the moment the hidden word is found."""
+    L = st.session_state.word_length
+    status = st.empty()
+    board = st.empty()
+
+    for _ in range(n_generations):
+        if st.session_state.found:
+            break
+        gen = st.session_state.round_idx + 1
+
+        status.info(f"\U0001f916 Auto-play — generation {gen}: breeding...")
+        result = gl.auto_run_generation(
+            st.session_state.population, st.session_state.hidden_word,
+            st.session_state.pop_size, st.session_state.scoring_mode, st.session_state.rng,
+        )
+        offspring = result["offspring"]
+        st.session_state.total_evaluations += len(offspring)
+        for o in offspring:
+            update_best(o["word"])
+
+        with board.container():
+            st.markdown("**New offspring**")
+            for i, o in enumerate(offspring):
+                c1, c2 = st.columns([0.72, 0.28])
+                c1.markdown(f"**C{i + 1}** &nbsp; " + word_tiles_html(o["word"], mutated=o["mutated"], size=24), unsafe_allow_html=True)
+                c2.markdown(f"Fitness **{fmt_score(o['fitness'])}/{L}**")
+        time.sleep(delay)
+
+        winner = next((o for o in offspring if o["fitness"] == L), None)
+        new_population = result["population"]
+        fits = [score(w) for w in new_population]
+        st.session_state.history.append({"generation": gen, "best": max(fits), "avg": sum(fits) / len(fits)})
+        st.session_state.population = new_population
+        st.session_state.round_idx = gen
+        st.session_state.offspring = []
+
+        if winner:
+            st.session_state.found = True
+            st.session_state.winning_word = winner["word"]
+            st.session_state.found_generation = gen
+            st.session_state.phase = "finished"
+            status.success(f"\U0001f916 Found it in generation {gen}!")
+            time.sleep(delay)
+            break
+
+        status.success(f"\U0001f916 Generation {gen} complete — best fitness {fmt_score(max(fits))}/{L}")
+        with board.container():
+            st.markdown(f"**Population after generation {gen}**")
+            for i, w in enumerate(new_population):
+                c1, c2 = st.columns([0.72, 0.28])
+                c1.markdown(f"**M{i + 1}** &nbsp; " + word_tiles_html(w, size=24), unsafe_allow_html=True)
+                c2.markdown(f"Fitness **{fmt_score(score(w))}/{L}**")
+        time.sleep(delay)
+
+    status.empty()
+    board.empty()
+
+
 # ---------------------------------------------------------------------------
 # Rendering helpers
 # ---------------------------------------------------------------------------
@@ -339,6 +400,19 @@ def render_breeding():
     round_idx = st.session_state.round_idx
     pair_no = len(offspring) // 2
     game_id = st.session_state.game_id
+
+    if not offspring:
+        with st.expander("\U0001f916 Auto-Play (watch the GA run itself)", expanded=False):
+            ac1, ac2 = st.columns([2, 1])
+            n_gens = ac1.number_input(
+                "Generations to auto-play", min_value=1, max_value=gl.MAX_AUTOPLAY_GENERATIONS, value=5,
+                key=f"autoplay_n_{game_id}",
+                help="Automatically breeds and selects survivors, generation after generation, so you can "
+                     "watch the GA converge on its own. Stops early the moment the hidden word is found.",
+            )
+            if ac2.button("▶ Start", key=f"autoplay_btn_{game_id}_{round_idx}", width="stretch"):
+                auto_play(int(n_gens))
+                st.rerun()
 
     left, right = st.columns([0.42, 0.58])
 
