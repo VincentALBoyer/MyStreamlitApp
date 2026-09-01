@@ -131,6 +131,7 @@ def init_state():
         "iteration": 0,
         "tenure": 0,
         "tabu_remaining": {},
+        "tabu_source": {},
         "neighbor_mode": "manual",
         "candidate_list": [],
         "selected_out_pos": None,
@@ -206,6 +207,7 @@ def confirm_initial_solution():
         "iteration": 0,
         "tenure": 0,
         "tabu_remaining": {},
+        "tabu_source": {},
         "neighbor_mode": "manual",
         "candidate_list": [],
         "selected_out_pos": None,
@@ -311,6 +313,14 @@ def select_candidate(idx: int):
 def accept_move(cand: dict):
     ss = st.session_state
     ss.tabu_remaining = gl.advance_tabu(ss.tabu_remaining, ss.tenure, cand["out_cell"], cand["in_cell"])
+    # tabu_source mirrors tabu_remaining but records *why* each cell is tabu -
+    # the swap whose reversal it blocks - purely for display, so prune it to
+    # match whatever advance_tabu just aged out or dropped.
+    ss.tabu_source = {
+        cell: reason for cell, reason in ss.tabu_source.items() if cell in ss.tabu_remaining
+    }
+    if cand["out_cell"] in ss.tabu_remaining:
+        ss.tabu_source[cand["out_cell"]] = cand["in_cell"]
     ss.previous_path = ss.current_path
     ss.current_path = cand["new_path"]
     ss.iteration += 1
@@ -488,6 +498,7 @@ def render_candidate_panel():
         )
         if st.button("\U0001f9f9 Clear tabu list & continue"):
             ss.tabu_remaining = {}
+            ss.tabu_source = {}
             st.rerun()
         return
 
@@ -595,12 +606,20 @@ def render_search():
 
     if ss.tabu_remaining:
         entries = sorted(ss.tabu_remaining.items(), key=lambda item: (-item[1], item[0]))
-        st.caption(
-            "\U0001f6ab Tabu list (cell forbidden from re-entering the path, moves remaining): "
-            + ", ".join(f"{fmt_cell(cell)} × {remaining}" for cell, remaining in entries)
-        )
+        lines = []
+        for out_cell, remaining in entries:
+            in_cell = ss.tabu_source.get(out_cell)
+            move_desc = (
+                f"swap out {fmt_cell(out_cell)} → in {fmt_cell(in_cell)}" if in_cell is not None
+                else f"a move that removed {fmt_cell(out_cell)}"
+            )
+            lines.append(
+                f"- **{move_desc}**: bringing {fmt_cell(out_cell)} back is forbidden for "
+                f"{remaining} more move(s)"
+            )
+        st.markdown("\U0001f6ab **Tabu list** (recent swaps that can't be reversed yet):\n" + "\n".join(lines))
     else:
-        st.caption("\U0001f6ab Tabu list: empty — nothing is currently forbidden.")
+        st.caption("\U0001f6ab Tabu list: empty — no recent swap is currently forbidden from being reversed.")
     st.divider()
 
     last = ss.history[-1] if ss.history else None
