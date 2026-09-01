@@ -11,9 +11,9 @@ import plotting as pl
 
 st.set_page_config(page_title="Tabu Search Grid Game", page_icon="\U0001f500", layout="wide")
 
-COLOR_PATH = "#2a78d6"     # blue - a cell currently in the path (unchanged in a preview)
-COLOR_REMOVED = "#eb6834"  # orange - the cell a previewed candidate would remove
-COLOR_ADDED = "#1a9c5e"    # green - the cell a previewed candidate would add
+COLOR_PATH = "#2a78d6"     # blue - a cell currently in the path (unchanged in a selection)
+COLOR_REMOVED = "#eb6834"  # orange - the cell a selected candidate would remove
+COLOR_ADDED = "#1a9c5e"    # green - the cell a selected candidate would add
 
 # Streamlit's default "primary" button color (this app ships no theme config)
 # is a red that clashes with COLOR_PATH - grid cells rendered as real (enabled)
@@ -66,8 +66,8 @@ CONCEPTS = [
     ),
     (
         "Tabu list & tenure",
-        "The **tabu list** remembers the two cells touched by your last few moves and temporarily "
-        "forbids touching them again. **Tenure** is how many future iterations that ban lasts. "
+        "The **tabu list** remembers the cell removed by each of your last few moves and temporarily "
+        "forbids bringing it back in. **Tenure** is how many future iterations that ban lasts. "
         "Tenure = 0 means no memory at all - nothing is ever forbidden.",
     ),
     (
@@ -301,7 +301,7 @@ def clear_candidates():
 
 
 def select_candidate(idx: int):
-    """Toggles which candidate is previewed on the grid - click the already
+    """Toggles which candidate is selected on the grid - click the already
     selected row again to go back to showing the current solution."""
     ss = st.session_state
     ss.selected_candidate_idx = None if ss.selected_candidate_idx == idx else idx
@@ -435,7 +435,7 @@ def render_candidate_panel():
         return
 
     st.caption(
-        "Click a row to preview that swap on the grid — including a worse one, on purpose, to "
+        "Click a row to select that swap on the grid — including a worse one, on purpose, to "
         "escape a local optimum. Then confirm with ▶ Next round."
     )
     rows = st.container(height=380, border=False) if len(candidates) > 6 else st.container()
@@ -471,7 +471,7 @@ def render_candidate_panel():
             c2.markdown(f"sum **{c['new_sum']}** (Δ{c['delta']:+d}) · {status}")
             if c["admissible"]:
                 admissible_count += 1
-                label = "✓ Shown" if is_selected else "\U0001f441 Preview"
+                label = "✓ Shown" if is_selected else "Select"
                 if c3.button(
                     label, key=f"selrow_{ss.game_id}_{ss.iteration}_{i}",
                     type="primary" if is_selected else "secondary", width="stretch",
@@ -605,9 +605,9 @@ def render_search():
     with ctrl1:
         st.slider(
             "Tabu tenure", 0, gl.MAX_TENURE, key="tenure",
-            help="How many future iterations a swap's two cells stay forbidden from being touched "
-                 "again. 0 = no memory at all (can cycle). Very high values can forbid every feasible "
-                 "move at once — a deadlock.",
+            help="How many future iterations the cell a swap just removed stays forbidden from being "
+                 "brought back in. 0 = no memory at all (can cycle). Very high values can forbid every "
+                 "feasible move at once — a deadlock.",
         )
     with ctrl2:
         st.radio(
@@ -643,10 +643,10 @@ def render_search():
             cand = ss.candidate_list[ss.selected_candidate_idx]
             preview_str = " → ".join(str(grid[r][c]) for r, c in cand["new_path"])
             st.markdown(
-                f"**Previewing:** {preview_str} &nbsp; (sum = **{cand['new_sum']}**, Δ{cand['delta']:+d}) "
+                f"**Selected:** {preview_str} &nbsp; (sum = **{cand['new_sum']}**, Δ{cand['delta']:+d}) "
                 f"— 🟧 leaving, 🟩 arriving"
             )
-            st.caption("Confirm with ▶ Next round, or click the row again (or another row) to change the preview.")
+            st.caption("Confirm with ▶ Next round, or click the row again (or another row) to change the selection.")
 
             def cell_state(cell):
                 val = grid[cell[0]][cell[1]]

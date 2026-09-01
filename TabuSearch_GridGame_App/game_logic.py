@@ -13,11 +13,12 @@ constrained analogues of the slide's "Replace" and "Shift" moves:
     or tail) - that end is dropped entirely and the path grows from the
     *other* end instead, needing adjacency there.
 
-A tabu list remembers the two cells touched by each accepted move (the one
-removed, the one inserted) and forbids touching either one again for
-`tenure` future moves - this is what lets a search escape a local optimum
-instead of cycling straight back to it. Aspiration overrides the tabu list
-when a forbidden move would beat the best solution found so far.
+A tabu list remembers the cell removed by each accepted move and forbids
+re-inserting it for `tenure` future moves - this is what lets a search
+escape a local optimum instead of immediately cycling straight back to it.
+The cell that was just inserted is not itself restricted; only "coming
+back" is tabu. Aspiration overrides the tabu list when a forbidden move
+would beat the best solution found so far.
 
 Every random choice (grid generation) is driven by an explicit
 random.Random instance so a game can be reproduced from a shared code,
@@ -173,7 +174,7 @@ def score_candidate(
     new_path = apply_shift(path, pos, new_cell) if move_type == "shift" else apply_swap(path, pos, new_cell)
     new_sum = path_sum(grid, new_path)
     delta = new_sum - path_sum(grid, path)
-    tabu = tabu_remaining.get(out_cell, 0) > 0 or tabu_remaining.get(new_cell, 0) > 0
+    tabu = tabu_remaining.get(new_cell, 0) > 0
     aspiration = tabu and new_sum > best_sum
     return {
         "pos": pos,
@@ -215,14 +216,16 @@ def enumerate_neighborhood(grid: list, path: list, tabu_remaining: dict, best_su
 
 def advance_tabu(tabu_remaining: dict, tenure: int, out_cell: tuple, in_cell: tuple) -> dict:
     """Ages every existing tabu entry down by one move (dropping expired
-    ones), then - if tenure > 0 - freshly forbids touching either cell
-    involved in the move just accepted for the next `tenure` moves.
-    tenure=0 never adds anything, so no move is ever blocked: exactly the
-    "no memory" state that lets a greedy search cycle."""
+    ones), then - if tenure > 0 - freshly forbids re-inserting the cell
+    just removed (`out_cell`) for the next `tenure` moves, so the search
+    can't immediately undo the move it just made. `in_cell` is left free to
+    be removed again later - only "coming back" is tabu, not touching the
+    cell that just entered the path. tenure=0 never adds anything, so no
+    move is ever blocked: exactly the "no memory" state that lets a greedy
+    search cycle."""
     updated = {cell: remaining - 1 for cell, remaining in tabu_remaining.items() if remaining - 1 > 0}
     if tenure > 0:
         updated[out_cell] = tenure
-        updated[in_cell] = tenure
     return updated
 
 

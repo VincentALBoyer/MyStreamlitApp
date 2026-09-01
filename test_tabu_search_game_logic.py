@@ -165,7 +165,7 @@ def test_score_candidate_and_tabu_aspiration():
     print(f"   - Untabu'd candidate: new_sum={cand['new_sum']}, delta={cand['delta']}, admissible.")
 
     print("16. A tabu'd cell blocks the move unless aspiration applies...")
-    tabu = {(1, 2): 2}  # the in_cell is currently forbidden
+    tabu = {(1, 2): 2}  # (1,2) was just removed, so re-inserting it is forbidden
     blocked = gl.score_candidate(grid, path, 2, (1, 2), tabu_remaining=tabu, best_sum=100)
     assert blocked["tabu"] is True
     assert blocked["aspiration"] is False  # 9 is not > best_sum=100
@@ -206,18 +206,33 @@ def test_enumerate_neighborhood_only_feasible():
 
 
 def test_advance_tabu_countdown_and_zero_tenure():
-    print("19. advance_tabu adds fresh entries and ages down existing ones...")
+    print("19. advance_tabu only forbids re-inserting the removed cell, not the inserted one...")
     tabu = {}
     tabu = gl.advance_tabu(tabu, tenure=2, out_cell=(0, 0), in_cell=(1, 1))
-    assert tabu == {(0, 0): 2, (1, 1): 2}
+    assert tabu == {(0, 0): 2}
+    assert (1, 1) not in tabu  # the cell just inserted stays free to be removed again later
     tabu = gl.advance_tabu(tabu, tenure=2, out_cell=(2, 2), in_cell=(3, 3))
-    # Prior entries age down by 1; new entries from this move start fresh at 2.
-    assert tabu[(0, 0)] == 1 and tabu[(1, 1)] == 1
-    assert tabu[(2, 2)] == 2 and tabu[(3, 3)] == 2
+    # Prior entry ages down by 1; new entry from this move starts fresh at 2.
+    assert tabu[(0, 0)] == 1
+    assert tabu[(2, 2)] == 2
+    assert (3, 3) not in tabu
     tabu = gl.advance_tabu(tabu, tenure=2, out_cell=(4, 4), in_cell=(5, 5))
-    # (0,0)/(1,1) should have expired (aged to 0) and been dropped.
-    assert (0, 0) not in tabu and (1, 1) not in tabu
-    print("   - Entries age down each move and expire after exactly `tenure` future moves.")
+    # (0,0) should have expired (aged to 0) and been dropped.
+    assert (0, 0) not in tabu
+    print("   - Only the removed cell is entered as tabu; it ages down and expires after `tenure` future moves.")
+
+    print("19b. with tenure=1 a single accepted move blocks exactly the reverse move, "
+          "not the neighbor on the other side of it...")
+    grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    path = [(0, 0), (0, 1), (0, 2)]  # sum = 6
+    tabu = gl.advance_tabu({}, tenure=1, out_cell=(0, 2), in_cell=(1, 2))
+    # Coming back (re-inserting the just-removed cell) is blocked...
+    reverse = gl.score_candidate(grid, [(0, 0), (0, 1), (1, 2)], 2, (0, 2), tabu_remaining=tabu, best_sum=100)
+    assert reverse["tabu"] is True
+    # ...but immediately swapping the newly-inserted cell back out again is not.
+    onward = gl.score_candidate(grid, [(0, 0), (0, 1), (1, 2)], 2, (2, 2), tabu_remaining=tabu, best_sum=100)
+    assert onward["tabu"] is False
+    print("   - Confirms tenure=1 forbids only 'coming back', not touching the newly-inserted cell.")
 
     print("20. tenure=0 never adds a tabu entry (no memory)...")
     tabu0 = gl.advance_tabu({}, tenure=0, out_cell=(0, 0), in_cell=(1, 1))
