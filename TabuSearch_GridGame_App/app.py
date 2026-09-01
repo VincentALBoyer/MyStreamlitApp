@@ -592,6 +592,15 @@ def render_search():
     top[2].metric("Best found", ss.best_sum)
     top[3].metric("Tabu entries", len(ss.tabu_remaining))
     top[4].metric("Elapsed", f"{time.time() - ss.start_time:.0f}s")
+
+    if ss.tabu_remaining:
+        entries = sorted(ss.tabu_remaining.items(), key=lambda item: (-item[1], item[0]))
+        st.caption(
+            "\U0001f6ab Tabu list (cell forbidden from re-entering the path, moves remaining): "
+            + ", ".join(f"{fmt_cell(cell)} × {remaining}" for cell, remaining in entries)
+        )
+    else:
+        st.caption("\U0001f6ab Tabu list: empty — nothing is currently forbidden.")
     st.divider()
 
     last = ss.history[-1] if ss.history else None
