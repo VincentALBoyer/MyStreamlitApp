@@ -30,10 +30,6 @@ SCORING_LABELS = {
 MAX_AUTOPLAY_GENERATIONS = 20  # keeps a single auto-play run bounded and short
 
 
-def new_game_code() -> str:
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-
-
 def code_to_seed(code: str) -> int:
     """Deterministic seed from a share code, so the same code always
     regenerates the same initial population."""

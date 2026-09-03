@@ -85,6 +85,7 @@ def init_state():
         "start_time": None,
         "best_word": None,
         "best_fitness": None,
+        "best_improved_gen": 0,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -102,11 +103,14 @@ def fmt_score(v: float) -> str:
 
 def update_best(word: str):
     """Tracks the best-fitness individual seen all game, across every
-    population and offspring pool - not just whoever survives selection."""
+    population and offspring pool - not just whoever survives selection.
+    Also records which generation last improved on it, so the mutation dice
+    can ramp up once the search stalls (see is_stagnant)."""
     fit_val = score(word)
     if st.session_state.best_fitness is None or fit_val > st.session_state.best_fitness:
         st.session_state.best_word = word
         st.session_state.best_fitness = fit_val
+        st.session_state.best_improved_gen = st.session_state.round_idx
 
 
 def start_game(word: str, pop_size: int, code: str, scoring_mode: str):
@@ -141,6 +145,7 @@ def start_game(word: str, pop_size: int, code: str, scoring_mode: str):
         "phase": "breeding",
         "best_word": None,
         "best_fitness": None,
+        "best_improved_gen": 0,
     })
     for w in population:
         update_best(w)
@@ -171,13 +176,34 @@ def toggle_parent(i: int, order_key: str):
     st.session_state[order_key] = order
 
 
+STAGNATION_THRESHOLD = 3  # generations with no new best-ever fitness before the dice gets aggressive
+
+
+def is_stagnant() -> bool:
+    """True once the best-ever fitness hasn't improved for
+    STAGNATION_THRESHOLD generations - the mutation dice mutates more
+    aggressively once this triggers, so a plateau doesn't stall the class
+    for many rounds."""
+    return st.session_state.round_idx - st.session_state.best_improved_gen >= STAGNATION_THRESHOLD
+
+
 def randomize_mutation(key: str, length: int):
-    """Rolls each gene independently with probability 1/length - matching
-    the classic recommendation of mutating about one letter per child on
-    average, while occasionally landing on 0 or several."""
+    """Rolls the mutation dice for one child. Normally mutates at most one
+    gene, with the same overall chance of hitting *some* gene as the
+    classic independent-per-gene scheme (each of `length` genes has a
+    1/length chance, so P(at least one) = 1 - (1 - 1/length)**length) - just
+    capped to a single gene instead of occasionally landing on several. Once
+    progress has stalled (is_stagnant), gets aggressive instead: always
+    mutates at least one gene, and a coin flip for a second, to help escape
+    the plateau."""
     rng = st.session_state.rng
-    p = 1.0 / length
-    st.session_state[key] = [i for i in range(length) if rng.random() < p]
+    if is_stagnant():
+        n = 2 if length >= 2 and rng.random() < 0.5 else 1
+        positions = rng.sample(range(length), n)
+    else:
+        p_any_mutation = 1 - (1 - 1.0 / length) ** length
+        positions = [rng.randrange(length)] if rng.random() < p_any_mutation else []
+    st.session_state[key] = positions
 
 
 def commit_pair(a_idx: int, b_idx: int, cut: int, mutate_positions1: list, mutate_positions2: list):
@@ -466,12 +492,21 @@ def render_breeding():
         st.markdown("A &nbsp; " + word_tiles_html(pop[a_idx], cut=cut, size=22), unsafe_allow_html=True)
         st.markdown("B &nbsp; " + word_tiles_html(pop[b_idx], cut=cut, size=22), unsafe_allow_html=True)
 
-        randomize_help = "Randomly decide which genes mutate (each gene has an independent ~1/N chance)."
+        if is_stagnant():
+            st.caption(
+                f"\U0001f321️ No new best fitness in {STAGNATION_THRESHOLD}+ generations — the 🎲 "
+                "dice is mutating more aggressively to help you escape the plateau."
+            )
+            randomize_help = (
+                "Progress has stalled, so this rolls 1-2 mutated genes instead of the usual 0-1."
+            )
+        else:
+            randomize_help = "Randomly mutates at most one gene (~1/N chance of any mutation at all)."
         mc1, mc2 = st.columns(2)
         with mc1:
             f1a, f1b = st.columns([0.72, 0.28])
             f1a.markdown(f"Child 1 &nbsp; fitness **{fmt_score(score(child1))}/{L}**")
-            mut1_key = f"mut1_pills_{game_id}_{round_idx}_{pair_no}"
+            mut1_key = f"mut1_pills_{game_id}_{round_idx}_{pair_no}_{a_idx}_{b_idx}"
             if f1b.button("\U0001f3b2", key=f"rand1_{game_id}_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
                 randomize_mutation(mut1_key, L)
                 st.rerun()
@@ -482,7 +517,7 @@ def render_breeding():
         with mc2:
             f2a, f2b = st.columns([0.72, 0.28])
             f2a.markdown(f"Child 2 &nbsp; fitness **{fmt_score(score(child2))}/{L}**")
-            mut2_key = f"mut2_pills_{game_id}_{round_idx}_{pair_no}"
+            mut2_key = f"mut2_pills_{game_id}_{round_idx}_{pair_no}_{a_idx}_{b_idx}"
             if f2b.button("\U0001f3b2", key=f"rand2_{game_id}_{round_idx}_{pair_no}", help=randomize_help, width="stretch"):
                 randomize_mutation(mut2_key, L)
                 st.rerun()
@@ -557,7 +592,6 @@ def render_finished():
             unsafe_allow_html=True,
         )
 
-    best_ever = max(h["best"] for h in st.session_state.history)
     generations_played = st.session_state.found_generation if st.session_state.found else st.session_state.round_idx
     elapsed = time.time() - st.session_state.start_time
 
@@ -565,7 +599,7 @@ def render_finished():
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Generations played", generations_played)
-    c2.metric("Best fitness reached", f"{fmt_score(best_ever)} / {L}")
+    c2.metric("Best fitness reached", f"{fmt_score(st.session_state.best_fitness)} / {L}")
     c3.metric("Individuals evaluated", st.session_state.total_evaluations)
     c4.metric("Total time", f"{elapsed:.0f}s")
     st.caption(f"Scoring method: {gl.SCORING_LABELS[st.session_state.scoring_mode]}")
@@ -597,7 +631,7 @@ with st.sidebar:
     st.markdown("### \U0001f9ec GA Word Game")
     if st.session_state.phase != "setup":
         st.divider()
-        st.metric("Best fitness so far", f"{fmt_score(max(h['best'] for h in st.session_state.history))} / {st.session_state.word_length}")
+        st.metric("Best fitness so far", f"{fmt_score(st.session_state.best_fitness)} / {st.session_state.word_length}")
         if st.session_state.phase in ("breeding", "selection"):
             if st.button("⏹ Stop Game", width="stretch"):
                 stop_game()
